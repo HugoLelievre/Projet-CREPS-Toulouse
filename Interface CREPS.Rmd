@@ -1,0 +1,294 @@
+---
+title: "Untitled"
+author: "Hugo"
+date: "18/03/2022"
+output: html_document
+---
+```{r}
+library(shiny)
+library(readxl)
+library(MLmetrics)
+library(randomForest)
+library(ggplot2)
+library(corrplot)
+library(leaps)
+library(bestglm)
+library(ggfortify)
+library(gridExtra)
+library(dplyr)
+library(reshape2)
+library(ROCR)
+library(pROC)
+library(MASS)
+library(partykit)
+library(rpart)
+library(rpart.plot)
+library(glmnet)
+library(naivebayes)
+library(ClustOfVar)
+```
+
+
+```{r}
+Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
+
+Tab_global <- Tab_global[,2:length(Tab_global)]
+
+Tab_global$Sport<-as.factor(Tab_global$Sport)
+Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
+Tab_global$Mob_inf_asy = factor(Tab_global$Mob_inf_asy)
+Tab_global$Mob_sup_asy = factor(Tab_global$Mob_sup_asy)
+Tab_global$Entrant = factor(Tab_global$Entrant)
+Tab_global$Doul_act_MI = factor(Tab_global$Doul_act_MI)
+Tab_global$Doul_act_MS = factor(Tab_global$Doul_act_MS)
+#Tab_global$Doul_act_rachis = factor(Tab_global$Doul_act_rachis)
+Tab_global$Blessure = factor(Tab_global$Blessure)
+Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
+Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
+Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
+#Tab_global$Blessure_T_T = factor(Tab_global$Blessure_T_T)
+Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
+Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
+Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
+
+Tab_global$Nb_bless <- as.numeric(Tab_global$Nb_bless)
+#Tab_global$`Mob inf asy`<-as.numeric(Tab_global$`Mob inf asy`)
+#Tab_global$`Mob sup asy`<-as.numeric(Tab_global$`Mob sup asy`)
+Tab_global$Mob_inf_droite<-as.numeric(Tab_global$Mob_inf_droite)
+Tab_global$Mob_inf_gauche<-as.numeric(Tab_global$Mob_inf_gauche)
+Tab_global$Mob_sup_droite<-as.numeric(Tab_global$Mob_sup_droite)
+Tab_global$Mob_sup_gauche<-as.numeric(Tab_global$Mob_sup_gauche)
+Tab_global$Mob_inf_bil <-as.numeric(Tab_global$Mob_inf_bil)
+Tab_global$Mob_sup_bil <-as.numeric(Tab_global$Mob_sup_bil)
+Tab_global$Global<-as.numeric(Tab_global$Global)
+#Tab_global$Blessure <- as.numeric(Tab_global$Blessure)
+
+#Tab_global$`Stab pelv asy`<-as.numeric(Tab_global$`Stab pelv asy`)
+
+Tab_global$Ancienne_blessure_MI <-as.numeric(Tab_global$Ancienne_blessure_MI)
+Tab_global$Ancienne_blessure_MS <-as.numeric(Tab_global$Ancienne_blessure_MS)
+Tab_global$Ancienne_blessure_rachis <-as.numeric(Tab_global$Ancienne_blessure_rachis)
+
+Tab_global$Stab_pelv_droite <-as.numeric(Tab_global$Stab_pelv_droite)
+Tab_global$Stab_pelv_gauche<-as.numeric(Tab_global$Stab_pelv_gauche)
+Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
+Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
+Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
+#Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+```
+
+
+
+```{r}
+```
+
+
+```{r}
+mod.log.bless <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = Tab_global, family=binomial(link="logit"))
+
+mod.log.bless.MI <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin,data = Tab_global, family=binomial(link="logit"))
+
+mod.log.bless.MS <- glm(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin,data = Tab_global, family=binomial(link="logit"))
+
+mod.log.bless.rachis <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = Tab_global, family=binomial(link="logit"))
+```
+
+```{r}
+```
+
+
+
+```{r}
+ui <- fluidPage(
+  titlePanel("Prediction des blessures"),
+  sidebarLayout(
+    sidebarPanel(
+      h3("Donnees du sportif", align = "center"),
+      
+      selectInput(inputId = "Sport",
+                  label = "Choisir le sport :",
+                  choices = c("Aviron", "Baseball", "Basket","Bowling","Nat Synchro","Natation","Rugby","Savate")),
+      sliderInput(inputId = "Somme_mob_inf",
+                  label = "Somme mob inf :",
+                  min = 0,
+                  max = 8,
+                  value = 4),
+      
+      sliderInput(inputId = "Somme_mob_sup",
+                  label = "Somme mob sup :",
+                  min = 0,
+                  max = 4,
+                  value = 2),
+      sliderInput(inputId = "Somme_stab_pelv",
+                  label = "Somme stab pelv :",
+                  min = 0,
+                  max = 6,
+                  value = 3),
+      sliderInput(inputId = "Stab_core_scap",
+                  label = "Stab core + Scap :",
+                  min = 0,
+                  max = 2,
+                  value = 1),
+      selectInput(inputId = "Entrant",
+                  label = "Entrant dans la structure :",
+                  choices = c("oui", "non")),
+      selectInput(inputId = "Ancienne_bless_MI_bin",
+                  label = "Anciennes blessures au membres inf :",
+                  choices = c("oui", "non")),
+      selectInput(inputId = "Ancienne_bless_MS_bin",
+                  label = "Anciennes blessures au membres sup :",
+                  choices = c("oui", "non")),
+    ),
+    mainPanel(
+      h3("Récap du sportif", align = "center"),
+      tableOutput("values"),
+      textOutput("proba_blessure"),
+      textOutput("proba_blessure_MI"),
+      plotOutput("cam_MI"),
+      textOutput("proba_blessure_MS"),
+      plotOutput("cam_MS"),
+      textOutput("proba_blessure_rachis"),
+      plotOutput("cam_rachis"),
+    )
+  )
+)
+server <- function(input, output) {
+  sliderValues <- reactive({
+    data.frame(
+      Name = c("Sport",
+               "Somme mob inf",
+               "Somme mob sup",
+               "Somme stab pelv",
+               "Stab core + pelv",
+               "Entrant",
+               "Anciennes blessures aux membres inf",
+               "Anciennes blessures aux membres sup"),
+      Value = as.character(c(input$Sport,
+                             input$Somme_mob_inf,
+                             input$Somme_mob_sup,
+                             input$Somme_stab_pelv,
+                             input$Stab_core_scap,
+                             input$Entrant,
+                             input$Ancienne_bless_MI_bin,
+                             input$Ancienne_bless_MS_bin)),
+      stringsAsFactors = TRUE)
+  })
+  output$values <- renderTable({
+    sliderValues()
+  })
+  nouveau_sportif <- reactive({
+    data.frame(
+      Sport = input$Sport,
+      Somme_mob_inf = input$Somme_mob_inf,
+      Somme_mob_sup = input$Somme_mob_sup,
+      Somme_stab_pelv = input$Somme_stab_pelv,
+      Stab_core_scap = input$Stab_core_scap,
+      Entrant = input$Entrant,
+      Ancienne_blessure_MI_bin = input$Ancienne_bless_MI_bin,
+      Ancienne_blessure_MS_bin = input$Ancienne_bless_MS_bin)
+  })
+  output$proba_blessure <- renderText({
+    print(paste("Probabilité d'être blessé au cours de l'année : ",predict(mod.log.bless, type = "response", newdata = nouveau_sportif())))
+  })
+  output$proba_blessure_MI <- renderText({
+    print(paste("Probabilité d'être blessé aux membres inf : ",predict(mod.log.bless.MI, type = "response", newdata = nouveau_sportif())))
+  })
+
+  output$proba_blessure_MS <- renderText({
+    print(paste("Probabilité d'être blessé aux membres sup : ",predict(mod.log.bless.MS, type = "response", newdata = nouveau_sportif())))
+  })
+  output$proba_blessure_rachis <- renderText({
+    print(paste("Probabilité d'être blessé au rachis/tronc : ",predict(mod.log.bless.rachis, type = "response", newdata = nouveau_sportif())))
+  })
+  output$cam_MI <- renderPlot({
+    count.MI <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  n = c(52, 38, 33),
+  prop = c(42.2, 30.9, 26.8)
+)
+
+count.MI <- count.MI %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
+
+ggplot(count.MI, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Durée d'indisponibilité pour les blessures aux MI")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+  
+    output$cam_MS <- renderPlot({
+    count.MS <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  n = c(17, 18, 6),
+  prop = c(41.5, 43.9, 14.6)
+)
+
+count.MS <- count.MS %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#FF9900", "#FF6600", "#FF3300")
+
+ggplot(count.MS, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Durée d'indisponibilité pour les blessures aux MS")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+    
+  output$cam_rachis <- renderPlot({
+    count.rachis <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  n = c(41, 2, 6),
+  prop = c(83.7, 4.1, 12.2)
+)
+
+count.rachis <- count.rachis %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFF66", "#66FF33", "#66CC33")
+
+ggplot(count.rachis, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Durée d'indisponibilité pour les blessures au rachis/tronc")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+}
+shinyApp(ui, server)
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+
+
+
+```{r}
+
+```
+

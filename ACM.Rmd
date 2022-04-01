@@ -1,0 +1,156 @@
+---
+title: "ACM"
+author: "Hugo"
+date: "05/03/2022"
+output: html_document
+---
+
+```{r}
+library(readxl)
+library(MLmetrics)
+library(randomForest)
+library(ggplot2)
+library(corrplot)
+library(leaps)
+library(bestglm)
+library(FactoMineR)
+library(factoextra)
+library(ggfortify)
+library(gridExtra)
+library(dplyr)
+library(reshape2)
+library(ROCR)
+library(pROC)
+library(MASS)
+library(partykit)
+library(rpart)
+library(rpart.plot)
+```
+
+```{r}
+Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
+
+Tab_global <- Tab_global[,2:43]
+
+Tab_global$Sport<-as.factor(Tab_global$Sport)
+Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
+Tab_global$Mob_inf_asy = factor(Tab_global$Mob_inf_asy)
+Tab_global$Mob_sup_asy = factor(Tab_global$Mob_sup_asy)
+Tab_global$Entrant = factor(Tab_global$Entrant)
+Tab_global$Doul_act_MI = factor(Tab_global$Doul_act_MI)
+Tab_global$Doul_act_MS = factor(Tab_global$Doul_act_MS)
+#Tab_global$Doul_act_rachis = factor(Tab_global$Doul_act_rachis)
+Tab_global$Blessure = factor(Tab_global$Blessure)
+Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
+Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
+Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
+Tab_global$Blessure_T_T = factor(Tab_global$Blessure_T_T)
+Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
+Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
+Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
+Tab_global$Somme_mob_inf_fact = factor(Tab_global$Somme_mob_inf_fact)
+Tab_global$Somme_mob_sup_fact = factor(Tab_global$Somme_mob_sup_fact)
+Tab_global$Somme_stab_pelv_fact = factor(Tab_global$Somme_stab_pelv_fact)
+
+Tab_global$Nb_bless <- as.numeric(Tab_global$Nb_bless)
+#Tab_global$`Mob inf asy`<-as.numeric(Tab_global$`Mob inf asy`)
+#Tab_global$`Mob sup asy`<-as.numeric(Tab_global$`Mob sup asy`)
+Tab_global$Mob_inf_droite<-as.numeric(Tab_global$Mob_inf_droite)
+Tab_global$Mob_inf_gauche<-as.numeric(Tab_global$Mob_inf_gauche)
+Tab_global$Mob_sup_droite<-as.numeric(Tab_global$Mob_sup_droite)
+Tab_global$Mob_sup_gauche<-as.numeric(Tab_global$Mob_sup_gauche)
+Tab_global$Mob_inf_bil <-as.numeric(Tab_global$Mob_inf_bil)
+Tab_global$Mob_sup_bil <-as.numeric(Tab_global$Mob_sup_bil)
+Tab_global$Global<-as.numeric(Tab_global$Global)
+#Tab_global$Blessure <- as.numeric(Tab_global$Blessure)
+
+#Tab_global$`Stab pelv asy`<-as.numeric(Tab_global$`Stab pelv asy`)
+
+Tab_global$Ancienne_blessure_MI <-as.numeric(Tab_global$Ancienne_blessure_MI)
+Tab_global$Ancienne_blessure_MS <-as.numeric(Tab_global$Ancienne_blessure_MS)
+Tab_global$Ancienne_blessure_rachis <-as.numeric(Tab_global$Ancienne_blessure_rachis)
+
+Tab_global$Stab_pelv_droite <-as.numeric(Tab_global$Stab_pelv_droite)
+Tab_global$Stab_pelv_gauche<-as.numeric(Tab_global$Stab_pelv_gauche)
+Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
+Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
+Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
+#Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+Tab_global
+```
+
+```{r}
+
+Tab_reduit <- cbind(Tab_global[,1], Tab_global[,13], Tab_global[,21:26],Tab_global[,30],Tab_global[,31:33], Tab_global[,37:38], Tab_global[,40:41])
+#summary(Tab_reduit)
+Sportifs.actifs <- cbind(Tab_reduit[,-c(3,4,5,6,7)], Tab_global[,21])
+#summary(Sportifs.actifs)
+Sportifs.actifs <- cbind(Tab_global[,1], Tab_global[,13], Tab_global[,26],Tab_global[,30],Tab_global[,31], Tab_global[,37], Tab_global[,21])
+summary(Sportifs.actifs)
+```
+
+
+
+
+```{r}
+#Sportifs.actifs <- cbind(Tab_global[,1:15],Tab_global[,26],Tab_global[,30:31],Tab_global[,33:34],Tab_global[,21])
+for (i in 1:length(Sportifs.actifs)) {
+  Sportifs.actifs[,i] <- factor(Sportifs.actifs[,i])
+  }
+Sportifs.actifs
+#Sport + Entrant + Ancienne_blessure_MI + Stab_core  + Stab_pelv_asy
+```
+
+
+```{r}
+for (i in 1:12) {
+  plot(as.factor(Sportifs.actifs[,i]), main = colnames(Sportifs.actifs)[i],
+       ylab = "Count", col="steelblue", las = 2)
+  }
+```
+
+
+```{r}
+#MCA(Sportifs.actifs, graph = TRUE)
+res.mca <- MCA(Sportifs.actifs, graph = FALSE)
+eig.val <- get_eigenvalue(res.mca)
+fviz_screeplot (res.mca, addlabels = TRUE, ylim = c (0, 45))
+```
+
+```{r}
+fviz_mca_biplot (res.mca, repel = TRUE, 
+               ggtheme = theme_minimal())
+```
+
+```{r}
+var <- get_mca_var(res.mca)
+fviz_mca_var(res.mca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, 
+             ggtheme = theme_minimal())
+```
+
+
+```{r}
+ind <- get_mca_ind (res.mca)
+#fviz_mca_ind(res.mca, col.ind = "cos2", 
+#             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+#             geom = "point", 
+#             ggtheme = theme_minimal())
+fviz_mca_ind (res.mca, label = "none",axes = c(1,2), habillage = "Blessure",addEllipses = T, ggtheme = theme_minimal ())
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+
+
