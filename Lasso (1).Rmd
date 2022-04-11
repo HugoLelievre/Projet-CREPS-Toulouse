@@ -1,0 +1,1562 @@
+---
+title: "Lasso"
+author: "Hugo"
+date: "04/03/2022"
+output: html_document
+
+
+---
+# 0 - Importations utiles
+
+```{r}
+library(readxl)
+library(MLmetrics)
+library(randomForest)
+library(ggplot2)
+library(corrplot)
+library(leaps)
+library(bestglm)
+library(ggfortify)
+library(gridExtra)
+library(dplyr)
+library(reshape2)
+library(ROCR)
+library(pROC)
+library(MASS)
+library(partykit)
+library(rpart)
+library(rpart.plot)
+library(glmnet)
+library(naivebayes)
+library(ClustOfVar)
+```
+
+
+```{r}
+Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
+
+Tab_global <- Tab_global[,2:length(Tab_global)]
+
+Tab_global$Sport<-as.factor(Tab_global$Sport)
+Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
+Tab_global$Mob_inf_asy = factor(Tab_global$Mob_inf_asy)
+Tab_global$Mob_sup_asy = factor(Tab_global$Mob_sup_asy)
+Tab_global$Entrant = factor(Tab_global$Entrant)
+Tab_global$Doul_act_MI = factor(Tab_global$Doul_act_MI)
+Tab_global$Doul_act_MS = factor(Tab_global$Doul_act_MS)
+#Tab_global$Doul_act_rachis = factor(Tab_global$Doul_act_rachis)
+Tab_global$Blessure = factor(Tab_global$Blessure)
+Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
+Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
+Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
+#Tab_global$Blessure_T_T = factor(Tab_global$Blessure_T_T)
+Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
+Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
+Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
+
+Tab_global$Nb_bless <- as.numeric(Tab_global$Nb_bless)
+#Tab_global$`Mob inf asy`<-as.numeric(Tab_global$`Mob inf asy`)
+#Tab_global$`Mob sup asy`<-as.numeric(Tab_global$`Mob sup asy`)
+Tab_global$Mob_inf_droite<-as.numeric(Tab_global$Mob_inf_droite)
+Tab_global$Mob_inf_gauche<-as.numeric(Tab_global$Mob_inf_gauche)
+Tab_global$Mob_sup_droite<-as.numeric(Tab_global$Mob_sup_droite)
+Tab_global$Mob_sup_gauche<-as.numeric(Tab_global$Mob_sup_gauche)
+Tab_global$Mob_inf_bil <-as.numeric(Tab_global$Mob_inf_bil)
+Tab_global$Mob_sup_bil <-as.numeric(Tab_global$Mob_sup_bil)
+Tab_global$Global<-as.numeric(Tab_global$Global)
+#Tab_global$Blessure <- as.numeric(Tab_global$Blessure)
+
+#Tab_global$`Stab pelv asy`<-as.numeric(Tab_global$`Stab pelv asy`)
+
+Tab_global$Ancienne_blessure_MI <-as.numeric(Tab_global$Ancienne_blessure_MI)
+Tab_global$Ancienne_blessure_MS <-as.numeric(Tab_global$Ancienne_blessure_MS)
+Tab_global$Ancienne_blessure_rachis <-as.numeric(Tab_global$Ancienne_blessure_rachis)
+
+Tab_global$Stab_pelv_droite <-as.numeric(Tab_global$Stab_pelv_droite)
+Tab_global$Stab_pelv_gauche<-as.numeric(Tab_global$Stab_pelv_gauche)
+Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
+Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
+Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
+#Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+Tab_global
+```
+
+```{r}
+
+Tab_reduit <- cbind(Tab_global[,1], Tab_global[,24:28], Tab_global[,32:36], Tab_global[,20:23])
+summary(Tab_reduit)
+```
+
+# I - Utilisation de lasso pour la sélection de variables
+## I.I - Lasso pour expliquer Blessure
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.mat <- model.matrix(Blessure ~ 0 + Sport + Stab_core_scap + Entrant + Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv + Ancienne_blessure_MI_bin + Ancienne_blessure_MS_bin + Doul_act_MI + Doul_act_MS , data = Tab_reduit)
+
+reg.lasso <- glmnet(y = Tab_reduit$Blessure, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_global$Blessure, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+
+
+## I.II - Lasso pour expliquer Blessure_MI
+
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.mat <- model.matrix(Blessure_MI ~ 0 + Sport + Stab_core_scap + Entrant + Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv + Ancienne_blessure_MI_bin + Ancienne_blessure_MS_bin + Doul_act_MI + Doul_act_MS , data = Tab_reduit)
+
+reg.lasso <- glmnet(y = Tab_reduit$Blessure_MI, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_global$Blessure_MI, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+## I.III - Lasso pour expliquer Blessure_MS
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.mat <- model.matrix(Blessure_MS ~ 0 + Sport + Stab_core_scap + Entrant + Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv + Ancienne_blessure_MI_bin + Ancienne_blessure_MS_bin + Doul_act_MI + Doul_act_MS , data = Tab_reduit)
+
+reg.lasso <- glmnet(y = Tab_reduit$Blessure_MS, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_global$Blessure_MS, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+## I. IV - Lasso pour expliquer les Blessures Rachis
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.mat <- model.matrix(Blessure_rachis ~ 0 + Sport + Stab_core_scap + Entrant + Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv + Ancienne_blessure_MI_bin + Ancienne_blessure_MS_bin , data = Tab_reduit)
+
+reg.lasso <- glmnet(y = Tab_reduit$Blessure_rachis, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_global$Blessure_rachis, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+#II - ClustOfVar
+
+```{r}
+X_quanti <- cbind(Tab_global[,2:4], Tab_global[,6:8], Tab_global[,10:12], Tab_global[,28] )
+X_quali <- cbind(Tab_global[,1],Tab_global[,24],Tab_global[,32:36])
+
+dendo <- hclustvar(X.quanti = X_quanti, X.quali = X_quali)
+plot (dendo, main = "Dendogram ClustOfVar")
+
+```
+
+```{r}
+stab <- stability (dendo, B=100)
+plot(stab, main = "Stability of the partitions")
+
+```
+
+```{r}
+
+partition <- cutreevar(dendo, 6)
+summary(partition)
+
+```
+## II. I - CoV+Lasso pour expliquer Blessure
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+Blessure <- Tab_global$Blessure
+temp <- partition$scores
+temp <- as.data.frame(temp)
+Tab_red <- cbind(temp,Blessure)
+x.mat <- model.matrix(Blessure ~ .-1, data = Tab_red)
+
+reg.lasso <- glmnet(y = Tab_red$Blessure, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red$Blessure, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+## II. II - CoV pour expliquer Blessure_MI
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+temp2 <- partition$scores
+temp2 <- as.data.frame(temp2)
+Blessure_MI <- Tab_global$Blessure_MI
+Tab_red_MI <- cbind(temp2,Blessure_MI)
+x.matMI <- model.matrix(Blessure_MI ~ .-1, data = Tab_red_MI)
+
+reg.lasso <- glmnet(y = Tab_red_MI$Blessure_MI, x = x.matMI, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_MI$Blessure_MI, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.1se),col="red")
+```
+## II. III - CoV pour expliquer Blessure_MS
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+temp3 <- partition$scores
+temp3 <- as.data.frame(temp3)
+Blessure_MS <- Tab_global$Blessure_MS
+Tab_red_MS <- cbind(temp3,Blessure_MS)
+x.matMS <- model.matrix(Blessure_MS ~ .-1, data = Tab_red_MS)
+
+reg.lasso <- glmnet(y = Tab_red_MS$Blessure_MS, x = x.matMS, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_MS$Blessure_MS, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+## II. IV - CoV pour expliquer Blessure_rachis
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+temp4 <- partition$scores
+temp4 <- as.data.frame(temp4)
+Blessure_rachis <- Tab_global$Blessure_rachis
+Tab_red_Rachis <- cbind(temp4,Blessure_rachis)
+x.matRachis <- model.matrix(Blessure_rachis ~ .-1, data = Tab_red_Rachis)
+
+reg.lasso <- glmnet(y = Tab_red_Rachis$Blessure_rachis, x = x.matRachis, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_Rachis$Blessure_rachis, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+
+
+
+
+
+# II - Comparaison des modèles
+## II.I - Modèles pour Blessure
+
+
+```{r, warning=FALSE}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+S_AUC_CoV <- c()
+
+
+Bonnes_pred_tree <- c()
+Bonnes_pred_rf <- c()
+Bonnes_pred_modlog <- c()
+Bonnes_pred_modlog_test <- c()
+Bonnes_pred_nb <- c()
+Bonnes_pred_CoV <- c()
+
+for (i in 1:1000){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+  
+mod.log.test <- glm(Blessure ~ Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv, data = dapp, family=binomial(link="logit"))
+glm.app.test <- glm(mod.log.test$formula, family=binomial, data=dapp)
+
+  tree.reg3 = rpart(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = dapp, control=rpart.control(minsplit = 5, cp = 0, maxdepth = 5))
+
+mod.log <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv, data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+glm.app.cst <- glm(Blessure ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.tree <- predict(tree.reg3, type = "prob", newdata = dtest)[, 2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+prev.logit.test <- predict(glm.app.test, newdata=dtest, type="response")
+
+rocobj.logit.test <- roc(dtest$Blessure, prev.logit.test, levels = c("non","oui"), direction="<")
+rocobj.nb <- roc(dtest$Blessure, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.tree <- roc(dtest$Blessure, prev.tree, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+
+S_AUC_tree = append(S_AUC_tree, rocobj.tree$auc)
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_modlog_test = append(S_AUC_modlog_test, rocobj.logit.test$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+
+  bp.tree = which((prev.tree > 0.5 & dtest$Blessure == "oui")|(prev.tree < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_tree = append(Bonnes_pred_tree,length(bp.tree)/length(dtest$Blessure))
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure == "oui")|(prev.rf < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_rf = append(Bonnes_pred_rf,length(bp.rf)/length(dtest$Blessure))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure == "oui")|(prev.logit < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog = append(Bonnes_pred_modlog,length(bp.modlog)/length(dtest$Blessure))
+  bp.modlog.test = which((prev.logit.test > 0.5 & dtest$Blessure == "oui")|(prev.logit.test < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog_test = append(Bonnes_pred_modlog_test,length(bp.modlog.test)/length(dtest$Blessure))
+  bp.nb = which((prev.nb > 0.5 & dtest$Blessure == "oui")|(prev.nb < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_nb = append(Bonnes_pred_nb,length(bp.nb)/length(dtest$Blessure))
+}
+```
+
+```{r}
+rpart.plot(tree.reg3)
+```
+
+```{r}
+boxplot(S_AUC_tree,S_AUC_rf,S_AUC_modlog, S_AUC_nb,ylab="AUC",col = c("green","red","blue", "yellow"), names = c("tree","random forest","mod log","naive bayes"))
+median(S_AUC_tree)
+median(S_AUC_rf)
+median(S_AUC_modlog)
+median(S_AUC_nb)
+```
+
+
+
+```{r}
+boxplot(Bonnes_pred_tree, Bonnes_pred_rf, Bonnes_pred_modlog, Bonnes_pred_nb,ylab="pourcentage de prédictions correctes",col = c("green","red","blue","yellow"), names = c("tree","random forest","mod log","naive bayes"))
+median(Bonnes_pred_tree)
+median(Bonnes_pred_rf)
+median(Bonnes_pred_modlog)
+median(Bonnes_pred_nb)
+```
+COMPARAISON MEILLEURS MODELES
+
+
+```{r, warning=FALSE} 
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+S_AUC_modlogCoV <- c()
+S_AUC_modlogCoV_Lasso <- c()
+
+Bonnes_pred_tree <- c()
+Bonnes_pred_rf <- c()
+Bonnes_pred_modlog <- c()
+Bonnes_pred_modlog_test <- c()
+Bonnes_pred_nb <- c()
+Bonnes_pred_modlogCoV <- c()
+Bonnes_pred_modlogCoV_Lasso <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+  
+  dapp2 = Tab_red[perm[1:l], ]  # Data apprentissage
+  dtest2 = Tab_red[-perm[1:l], ]
+
+mod.log <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv, data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+modlogCoV <- glm(Blessure ~ .,family = binomial(link="logit"), data = dapp2)
+
+modlogCoV_Lasso <- glm(Blessure ~ cluster1 + cluster3 + cluster5 + cluster6 , data = dapp2, family=binomial(link="logit"))
+
+
+glm.app.cst <- glm(Blessure ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+prev.modlogCoV <- predict(modlogCoV,newdata = dtest2, type = "response")
+prev.modlogCoV_Lasso <- predict(modlogCoV_Lasso, newdata=dtest2, type="response")
+
+rocobj.nb <- roc(dtest$Blessure, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+rocobj.logCoV <- roc(dtest2$Blessure, prev.modlogCoV, levels = c("non","oui"), direction="<")
+rocobj.logCoV_Lasso <- roc(dtest2$Blessure, prev.modlogCoV_Lasso, levels = c("non","oui"), direction="<")
+
+
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+S_AUC_modlogCoV = append(S_AUC_modlogCoV, rocobj.logCoV$auc)
+S_AUC_modlogCoV_Lasso = append(S_AUC_modlogCoV_Lasso, rocobj.logCoV_Lasso$auc)
+
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure == "oui")|(prev.rf < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_rf = append(Bonnes_pred_rf,length(bp.rf)/length(dtest$Blessure))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure == "oui")|(prev.logit < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog = append(Bonnes_pred_modlog,length(bp.modlog)/length(dtest$Blessure))
+  bp.nb = which((prev.nb > 0.5 & dtest$Blessure == "oui")|(prev.nb < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_nb = append(Bonnes_pred_nb,length(bp.nb)/length(dtest$Blessure))
+  bp.modlogCoV <- length(which((prev.modlogCoV >0.5 & dtest2$Blessure == "oui")|(prev.modlogCoV < 0.5 & dtest2$Blessure == "non")))
+    bp.modlogCoV_Lasso = prev.modlogCoV_Lasso[prev.modlogCoV_Lasso == dtest2$Blessure]
+  Bonnes_pred_modlogCoV_Lasso = append(Bonnes_pred_modlogCoV_Lasso,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_rf,S_AUC_modlog, S_AUC_nb, S_AUC_modlogCoV, S_AUC_modlogCoV_Lasso, ylab="AUC",col = c("green","purple","red","blue", "yellow"), names = c("random forest","mod log","naive bayes", "CoV", "CoV_Lasso"))
+#mean(S_AUC_rf);
+median(S_AUC_rf)
+#mean(S_AUC_modlog);
+median(S_AUC_modlog)
+#mean(S_AUC_nb);
+median(S_AUC_nb)
+#mean(S_AUC_modlogCoV);
+median(S_AUC_modlogCoV)
+#mean(S_AUC_modlogCoV_Lasso);
+median(S_AUC_modlogCoV_Lasso)
+
+```
+```{r}
+boxplot(Bonnes_pred_rf, Bonnes_pred_modlog, Bonnes_pred_nb, Bonnes_pred_modlogCoV, Bonnes_pred_modlogCoV_Lasso, ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue", "pink"), names = c("random forest","mod log","Naive_Bayes", "CoV", "CoV_Lasso"))
+
+mean(Bonnes_pred_rf);median(Bonnes_pred_rf)
+mean(Bonnes_pred_modlog);median(Bonnes_pred_modlog)
+mean(Bonnes_pred_nb);median(Bonnes_pred_nb)
+mean(Bonnes_pred_modlogCoV);median(Bonnes_pred_modlogCoV)
+mean(Bonnes_pred_modlogCoV_Lasso);median(Bonnes_pred_modlogCoV_Lasso)
+```
+
+
+## II.II - Modèles pour Blessure_MI
+
+
+```{r}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+
+Bonnes_pred_tree <- c()
+Bonnes_pred_rf <- c()
+Bonnes_pred_modlog <- c()
+Bonnes_pred_modlog_test <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+  
+mod.log.test <- glm(Blessure_MI ~ Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv, data = dapp, family=binomial(link="logit"))
+
+glm.app.test <- glm(mod.log.test$formula, family=binomial, data=dapp)
+prev.logit.test <- predict(glm.app.test, newdata=dtest, type="response")
+rocobj.logit.test <- roc(dtest$Blessure, prev.logit.test, levels = c("non","oui"), direction="<")
+  
+  tree.reg3 = rpart(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin + Doul_act_MI,data = dapp, control=rpart.control(minsplit = 5, cp = 0.01, maxdepth = 5))
+  
+  prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+
+mod.log <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin + Doul_act_MI ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+
+output.forest <- randomForest(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin + Doul_act_MI,data = dapp, mtry = 5, keep.forest = T)
+
+
+glm.app.cst <- glm(Blessure_MI ~ 1, family=binomial, data=dapp)
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+
+prev.tree <- predict(tree.reg3, type = "prob", newdata = dtest)[, 2]
+
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+
+rocobj.tree <- roc(dtest$Blessure, prev.tree, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+
+S_AUC_tree = append(S_AUC_tree, rocobj.tree$auc)
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_modlog_test = append(S_AUC_modlog_test, rocobj.logit.test$auc)
+
+  bp.tree = prev.tree3[prev.tree3 == dtest$Blessure]
+  Bonnes_pred_tree = append(Bonnes_pred_tree,length(bp.tree)/length(dtest$Blessure))
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure == "oui")|(prev.rf < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_rf = append(Bonnes_pred_rf,length(bp.rf)/length(dtest$Blessure))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure == "oui")|(prev.logit < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog = append(Bonnes_pred_modlog,length(bp.modlog)/length(dtest$Blessure))
+  bp.modlog.test = which((prev.logit.test > 0.5 & dtest$Blessure == "oui")|(prev.logit.test < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog_test = append(Bonnes_pred_modlog_test,length(bp.modlog.test)/length(dtest$Blessure))
+}
+```
+
+```{r}
+rpart.plot(tree.reg3)
+```
+
+```{r}
+boxplot(S_AUC_tree,S_AUC_rf,S_AUC_modlog, S_AUC_modlog_test,ylab="AUC",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(S_AUC_tree);median(S_AUC_tree)
+mean(S_AUC_rf);median(S_AUC_rf)
+mean(S_AUC_modlog);median(S_AUC_modlog)
+
+```
+
+
+```{r}
+boxplot(Bonnes_pred_tree, Bonnes_pred_rf, Bonnes_pred_modlog, Bonnes_pred_modlog_test,ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(Bonnes_pred_tree);median(Bonnes_pred_tree)
+mean(Bonnes_pred_rf);median(Bonnes_pred_rf)
+mean(Bonnes_pred_modlog);median(Bonnes_pred_modlog)
+mean(Bonnes_pred_modlog_test);median(Bonnes_pred_modlog_test)
+```
+
+COMPARAISON MEILLEURS MODELES
+
+
+```{r}
+S_AUC_rf_MI <- c()
+S_AUC_modlog_MI <- c()
+S_AUC_nb_MI <- c()
+S_AUC_modlogCoV_MI <- c()
+S_AUC_modlogCoV_Lasso_MI <- c()
+
+Bonnes_pred_rf_MI <- c()
+Bonnes_pred_modlog_MI <- c()
+Bonnes_pred_nb_MI <- c()
+Bonnes_pred_modlogCoV_MI <- c()
+Bonnes_pred_modlogCoV_Lasso_MI <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+  
+  dapp2 = Tab_red_MI[perm[1:l], ]  # Data apprentissage
+  dtest2 = Tab_red_MI[-perm[1:l], ]
+
+mod.log <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv + Ancienne_blessure_MS_bin + Doul_act_MI ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv + Ancienne_blessure_MS_bin + Doul_act_MI,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv + Ancienne_blessure_MS_bin + Doul_act_MI, data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+modlogCoV <- glm(Blessure_MI ~ .,family = binomial(link="logit"), data = dapp2)
+
+modlogCoV_Lasso <- glm(Blessure_MI ~ cluster1 + cluster3 + cluster4 + cluster5 + cluster6 , data = dapp2, family=binomial(link="logit"))
+
+
+glm.app.cst <- glm(Blessure_MI ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+prev.modlogCoV <- predict(modlogCoV,newdata = dtest2, type = "response")
+prev.modlogCoV_Lasso <- predict(modlogCoV_Lasso, newdata=dtest2, type="response")
+
+rocobj.nb <- roc(dtest$Blessure_MI, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_MI, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_MI, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure_MI, prev.cst, levels = c("non","oui"), direction="<")
+rocobj.logCoV <- roc(dtest2$Blessure_MI, prev.modlogCoV, levels = c("non","oui"), direction="<")
+rocobj.logCoV_Lasso <- roc(dtest2$Blessure_MI, prev.modlogCoV_Lasso, levels = c("non","oui"), direction="<")
+
+
+S_AUC_rf_MI = append(S_AUC_rf_MI, rocobj.rf$auc)
+S_AUC_modlog_MI = append(S_AUC_modlog_MI, rocobj.logit$auc)
+S_AUC_nb_MI = append(S_AUC_nb_MI, rocobj.nb$auc)
+S_AUC_modlogCoV_MI = append(S_AUC_modlogCoV_MI, rocobj.logCoV$auc)
+S_AUC_modlogCoV_Lasso_MI = append(S_AUC_modlogCoV_Lasso_MI, rocobj.logCoV_Lasso$auc)
+
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure_MI == "oui")|(prev.rf < 0.5 & dtest$Blessure_MI == "non"))
+  Bonnes_pred_rf_MI = append(Bonnes_pred_rf_MI,length(bp.rf)/length(dtest$Blessure_MI))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure_MI == "oui")|(prev.logit < 0.5 & dtest$Blessure_MI == "non"))
+  Bonnes_pred_modlog_MI = append(Bonnes_pred_modlog_MI,length(bp.modlog)/length(dtest$Blessure_MI))
+  bp.nb = which((prev.nb > 0.5 & dtest$Blessure_MI == "oui")|(prev.nb < 0.5 & dtest$Blessure_MI == "non"))
+  Bonnes_pred_nb_MI = append(Bonnes_pred_nb_MI,length(bp.nb)/length(dtest$Blessure_MI))
+  bp.modlogCoV <- length(which((prev.modlogCoV >0.5 & dtest2$Blessure_MI == "oui")|(prev.modlogCoV < 0.5 & dtest2$Blessure_MI == "non")))
+  Bonnes_pred_modlogCoV_MI = append(Bonnes_pred_modlogCoV_MI,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_MI))
+    bp.modlogCoV_Lasso = prev.modlogCoV_Lasso[prev.modlogCoV_Lasso == dtest2$Blessure_MI]
+  Bonnes_pred_modlogCoV_Lasso_MI = append(Bonnes_pred_modlogCoV_Lasso_MI,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_MI))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_rf_MI,S_AUC_modlog_MI, S_AUC_nb_MI, S_AUC_modlogCoV_MI, S_AUC_modlogCoV_Lasso_MI, ylab="AUC",col = c("green","purple","red","blue", "yellow"), names = c("random forest","mod log","naive bayes", "CoV", "CoV_Lasso"))
+mean(S_AUC_rf_MI);median(S_AUC_rf_MI)
+mean(S_AUC_modlog_MI);median(S_AUC_modlog_MI)
+mean(S_AUC_nb_MI);median(S_AUC_nb_MI)
+mean(S_AUC_modlogCoV_MI);median(S_AUC_modlogCoV_MI)
+mean(S_AUC_modlogCoV_Lasso_MI);median(S_AUC_modlogCoV_Lasso_MI)
+
+```
+
+```{r}
+boxplot(Bonnes_pred_rf_MI, Bonnes_pred_modlog_MI, Bonnes_pred_nb_MI, Bonnes_pred_modlogCoV_MI, Bonnes_pred_modlogCoV_Lasso_MI, ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue", "pink"), names = c("random forest","mod log","Naive_Bayes", "CoV", "CoV_Lasso"))
+
+mean(Bonnes_pred_rf_MI);median(Bonnes_pred_rf_MI)
+mean(Bonnes_pred_modlog_MI);median(Bonnes_pred_modlog_MI)
+mean(Bonnes_pred_nb_MI);median(Bonnes_pred_nb_MI)
+mean(Bonnes_pred_modlogCoV_MI);median(Bonnes_pred_modlogCoV_MI)
+mean(Bonnes_pred_modlogCoV_Lasso_MI);median(Bonnes_pred_modlogCoV_Lasso_MI)
+```
+
+
+
+## II.III - Modèles pour Blessure_MS
+
+
+```{r}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+
+Bonnes_pred_tree <- c()
+Bonnes_pred_rf <- c()
+Bonnes_pred_modlog <- c()
+Bonnes_pred_modlog_test <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+  
+mod.log.test <- glm(Blessure_MI ~ Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv, data = dapp, family=binomial(link="logit"))
+
+glm.app.test <- glm(mod.log.test$formula, family=binomial, data=dapp)
+prev.logit.test <- predict(glm.app.test, newdata=dtest, type="response")
+rocobj.logit.test <- roc(dtest$Blessure, prev.logit.test, levels = c("non","oui"), direction="<")
+  
+  tree.reg3 = rpart(Blessure_MI ~ Sport + Stab_pelv_asy + Ancienne_blessure_MS_bin,data = dapp, control=rpart.control(minsplit = 5, cp = 0.01, maxdepth = 5))
+  
+  prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+
+mod.log <- glm(Blessure_MI ~ Sport + Stab_pelv_asy + Ancienne_blessure_MS_bin, data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+
+output.forest <- randomForest(Blessure_MI ~ Sport + Stab_pelv_asy + Ancienne_blessure_MS_bin,data = dapp, mtry = 2, keep.forest = T)
+
+
+glm.app.cst <- glm(Blessure_MI ~ 1, family=binomial, data=dapp)
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+
+prev.tree <- predict(tree.reg3, type = "prob", newdata = dtest)[, 2]
+
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+
+rocobj.tree <- roc(dtest$Blessure, prev.tree, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+
+S_AUC_tree = append(S_AUC_tree, rocobj.tree$auc)
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_modlog_test = append(S_AUC_modlog_test, rocobj.logit.test$auc)
+
+  bp.tree = prev.tree3[prev.tree3 == dtest$Blessure]
+  Bonnes_pred_tree = append(Bonnes_pred_tree,length(bp.tree)/length(dtest$Blessure))
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure == "oui")|(prev.rf < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_rf = append(Bonnes_pred_rf,length(bp.rf)/length(dtest$Blessure))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure == "oui")|(prev.logit < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog = append(Bonnes_pred_modlog,length(bp.modlog)/length(dtest$Blessure))
+  bp.modlog.test = which((prev.logit.test > 0.5 & dtest$Blessure == "oui")|(prev.logit.test < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog_test = append(Bonnes_pred_modlog_test,length(bp.modlog.test)/length(dtest$Blessure))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_tree,S_AUC_rf,S_AUC_modlog, S_AUC_modlog_test,ylab="AUC",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(S_AUC_tree);median(S_AUC_tree)
+mean(S_AUC_rf);median(S_AUC_rf)
+mean(S_AUC_modlog);median(S_AUC_modlog)
+
+```
+
+
+
+```{r}
+boxplot(Bonnes_pred_tree, Bonnes_pred_rf, Bonnes_pred_modlog, Bonnes_pred_modlog_test,ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(Bonnes_pred_tree);median(Bonnes_pred_tree)
+mean(Bonnes_pred_rf);median(Bonnes_pred_rf)
+mean(Bonnes_pred_modlog);median(Bonnes_pred_modlog)
+mean(Bonnes_pred_modlog_test);median(Bonnes_pred_modlog_test)
+```
+
+COMPARAISON MEILLEURS MODELES
+
+
+```{r}
+S_AUC_rf_MS <- c()
+S_AUC_modlog_MS <- c()
+S_AUC_nb_MS <- c()
+S_AUC_modlogCoV_MS <- c()
+S_AUC_modlogCoV_Lasso_MS <- c()
+
+Bonnes_pred_rf_MS <- c()
+Bonnes_pred_modlog_MS <- c()
+Bonnes_pred_nb_MS <- c()
+Bonnes_pred_modlogCoV_MS <- c()
+Bonnes_pred_modlogCoV_Lasso_MS <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+  
+  dapp2 = Tab_red_MS[perm[1:l], ]  # Data apprentissage
+  dtest2 = Tab_red_MS[-perm[1:l], ]
+
+mod.log <- glm(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin, data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin , data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+modlogCoV <- glm(Blessure_MS ~ .,family = binomial(link="logit"), data = dapp2)
+
+modlogCoV_Lasso <- glm(Blessure_MS ~ cluster1 + cluster2 + cluster6 , data = dapp2, family=binomial(link="logit"))
+
+
+glm.app.cst <- glm(Blessure_MS ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+prev.modlogCoV <- predict(modlogCoV,newdata = dtest2, type = "response")
+prev.modlogCoV_Lasso <- predict(modlogCoV_Lasso, newdata=dtest2, type="response")
+
+rocobj.nb <- roc(dtest$Blessure_MS, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_MS, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_MS, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure_MS, prev.cst, levels = c("non","oui"), direction="<")
+rocobj.logCoV <- roc(dtest2$Blessure_MS, prev.modlogCoV, levels = c("non","oui"), direction="<")
+rocobj.logCoV_Lasso <- roc(dtest2$Blessure_MS, prev.modlogCoV_Lasso, levels = c("non","oui"), direction="<")
+
+
+S_AUC_rf_MS = append(S_AUC_rf_MS, rocobj.rf$auc)
+S_AUC_modlog_MS = append(S_AUC_modlog_MS, rocobj.logit$auc)
+S_AUC_nb_MS = append(S_AUC_nb_MS, rocobj.nb$auc)
+S_AUC_modlogCoV_MS = append(S_AUC_modlogCoV_MS, rocobj.logCoV$auc)
+S_AUC_modlogCoV_Lasso_MS = append(S_AUC_modlogCoV_Lasso_MS, rocobj.logCoV_Lasso$auc)
+
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure_MS == "oui")|(prev.rf < 0.5 & dtest$Blessure_MS == "non"))
+  Bonnes_pred_rf_MS = append(Bonnes_pred_rf_MS,length(bp.rf)/length(dtest$Blessure_MS))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure_MS == "oui")|(prev.logit < 0.5 & dtest$Blessure_MS == "non"))
+  Bonnes_pred_modlog_MS = append(Bonnes_pred_modlog_MS,length(bp.modlog)/length(dtest$Blessure_MS))
+  bp.nb = which((prev.nb > 0.5 & dtest$Blessure_MS == "oui")|(prev.nb < 0.5 & dtest$Blessure_MS == "non"))
+  Bonnes_pred_nb_MS = append(Bonnes_pred_nb_MS,length(bp.nb)/length(dtest$Blessure_MS))
+  bp.modlogCoV <- length(which((prev.modlogCoV >0.5 & dtest2$Blessure_MS == "oui")|(prev.modlogCoV < 0.5 & dtest2$Blessure_MS == "non")))
+  Bonnes_pred_modlogCoV_MS = append(Bonnes_pred_modlogCoV_MS,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_MS))
+    bp.modlogCoV_Lasso = prev.modlogCoV_Lasso[prev.modlogCoV_Lasso == dtest2$Blessure_MS]
+  Bonnes_pred_modlogCoV_Lasso_MS = append(Bonnes_pred_modlogCoV_Lasso_MS,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_MS))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_rf_MS,S_AUC_modlog_MS, S_AUC_nb_MS, S_AUC_modlogCoV_MS, S_AUC_modlogCoV_Lasso_MS, ylab="AUC",col = c("green","purple","red","blue", "yellow"), names = c("random forest","mod log","naive bayes", "CoV", "CoV_Lasso"))
+mean(S_AUC_rf_MS);median(S_AUC_rf_MS)
+mean(S_AUC_modlog_MS);median(S_AUC_modlog_MS)
+mean(S_AUC_nb_MS);median(S_AUC_nb_MS)
+mean(S_AUC_modlogCoV_MS);median(S_AUC_modlogCoV_MS)
+mean(S_AUC_modlogCoV_Lasso_MS);median(S_AUC_modlogCoV_Lasso_MS)
+
+```
+
+```{r}
+boxplot(Bonnes_pred_rf_MS, Bonnes_pred_modlog_MS, Bonnes_pred_nb_MS, Bonnes_pred_modlogCoV_MS, Bonnes_pred_modlogCoV_Lasso_MS, ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue", "pink"), names = c("random forest","mod log","Naive_Bayes", "CoV", "CoV_Lasso"))
+
+mean(Bonnes_pred_rf_MS);median(Bonnes_pred_rf_MS)
+mean(Bonnes_pred_modlog_MS);median(Bonnes_pred_modlog_MS)
+mean(Bonnes_pred_nb_MS);median(Bonnes_pred_nb_MS)
+mean(Bonnes_pred_modlogCoV_MS);median(Bonnes_pred_modlogCoV_MS)
+mean(Bonnes_pred_modlogCoV_Lasso_MS);median(Bonnes_pred_modlogCoV_Lasso_MS)
+```
+
+## II. IV - Modèles pour Blessures rachis
+
+```{r}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+
+Bonnes_pred_tree <- c()
+Bonnes_pred_rf <- c()
+Bonnes_pred_modlog <- c()
+Bonnes_pred_modlog_test <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+  
+mod.log.test <- glm(Blessure_rachis ~ Somme_mob_inf + Somme_mob_sup + Somme_stab_pelv, data = dapp, family=binomial(link="logit"))
+
+glm.app.test <- glm(mod.log.test$formula, family=binomial, data=dapp)
+prev.logit.test <- predict(glm.app.test, newdata=dtest, type="response")
+rocobj.logit.test <- roc(dtest$Blessure_rachis, prev.logit.test, levels = c("non","oui"), direction="<")
+  
+  tree.reg3 = rpart(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = dapp, control=rpart.control(minsplit = 5, cp = 0.01, maxdepth = 5))
+  
+  prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+
+mod.log <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin, data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+
+output.forest <- randomForest(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = dapp, mtry = 2, keep.forest = T)
+
+
+glm.app.cst <- glm(Blessure_MI ~ 1, family=binomial, data=dapp)
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+
+prev.tree <- predict(tree.reg3, type = "prob", newdata = dtest)[, 2]
+
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+
+rocobj.tree <- roc(dtest$Blessure, prev.tree, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+
+S_AUC_tree = append(S_AUC_tree, rocobj.tree$auc)
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_modlog_test = append(S_AUC_modlog_test, rocobj.logit.test$auc)
+
+  bp.tree = prev.tree3[prev.tree3 == dtest$Blessure]
+  Bonnes_pred_tree = append(Bonnes_pred_tree,length(bp.tree)/length(dtest$Blessure))
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure == "oui")|(prev.rf < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_rf = append(Bonnes_pred_rf,length(bp.rf)/length(dtest$Blessure))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure == "oui")|(prev.logit < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog = append(Bonnes_pred_modlog,length(bp.modlog)/length(dtest$Blessure))
+  bp.modlog.test = which((prev.logit.test > 0.5 & dtest$Blessure == "oui")|(prev.logit.test < 0.5 & dtest$Blessure == "non"))
+  Bonnes_pred_modlog_test = append(Bonnes_pred_modlog_test,length(bp.modlog.test)/length(dtest$Blessure))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_tree,S_AUC_rf,S_AUC_modlog, S_AUC_modlog_test,ylab="AUC",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(S_AUC_tree);median(S_AUC_tree)
+mean(S_AUC_rf);median(S_AUC_rf)
+mean(S_AUC_modlog);median(S_AUC_modlog)
+
+```
+
+
+
+```{r}
+boxplot(Bonnes_pred_tree, Bonnes_pred_rf, Bonnes_pred_modlog, Bonnes_pred_modlog_test,ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue"), names = c("tree","random forest","mod log","mod log res TM2S"))
+mean(Bonnes_pred_tree);median(Bonnes_pred_tree)
+mean(Bonnes_pred_rf);median(Bonnes_pred_rf)
+mean(Bonnes_pred_modlog);median(Bonnes_pred_modlog)
+mean(Bonnes_pred_modlog_test);median(Bonnes_pred_modlog_test)
+```
+
+COMPARAISON MEILLEURS MODELES
+
+
+
+```{r}
+S_AUC_rf_rachis <- c()
+S_AUC_modlog_rachis <- c()
+S_AUC_nb_rachis <- c()
+S_AUC_modlogCoV_rachis <- c()
+S_AUC_modlogCoV_Lasso_rachis <- c()
+
+Bonnes_pred_rf_rachis <- c()
+Bonnes_pred_modlog_rachis <- c()
+Bonnes_pred_nb_rachis <- c()
+Bonnes_pred_modlogCoV_rachis <- c()
+Bonnes_pred_modlogCoV_Lasso_rachis <- c()
+
+for (i in 1:200){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+  
+  dapp2 = Tab_red_Rachis[perm[1:l], ]  # Data apprentissage
+  dtest2 = Tab_red_Rachis[-perm[1:l], ]
+
+mod.log <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin, data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin, data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+modlogCoV <- glm(Blessure_rachis ~ .,family = binomial(link="logit"), data = dapp2)
+
+modlogCoV_Lasso <- glm(Blessure_rachis ~ cluster1 + cluster3 + cluster4 + cluster5 , data = dapp2, family=binomial(link="logit"))
+
+
+glm.app.cst <- glm(Blessure_rachis ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+prev.modlogCoV <- predict(modlogCoV,newdata = dtest2, type = "response")
+prev.modlogCoV_Lasso <- predict(modlogCoV_Lasso, newdata=dtest2, type="response")
+
+rocobj.nb <- roc(dtest$Blessure_rachis, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_rachis, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_rachis, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure_rachis, prev.cst, levels = c("non","oui"), direction="<")
+rocobj.logCoV <- roc(dtest2$Blessure_rachis, prev.modlogCoV, levels = c("non","oui"), direction="<")
+rocobj.logCoV_Lasso <- roc(dtest2$Blessure_rachis, prev.modlogCoV_Lasso, levels = c("non","oui"), direction="<")
+
+
+S_AUC_rf_rachis = append(S_AUC_rf_rachis, rocobj.rf$auc)
+S_AUC_modlog_rachis = append(S_AUC_modlog_rachis, rocobj.logit$auc)
+S_AUC_nb_rachis = append(S_AUC_nb_rachis, rocobj.nb$auc)
+S_AUC_modlogCoV_rachis = append(S_AUC_modlogCoV_rachis, rocobj.logCoV$auc)
+S_AUC_modlogCoV_Lasso_rachis = append(S_AUC_modlogCoV_Lasso_rachis, rocobj.logCoV_Lasso$auc)
+
+  bp.rf = which((prev.rf > 0.5 & dtest$Blessure_rachis == "oui")|(prev.rf < 0.5 & dtest$Blessure_rachis == "non"))
+  Bonnes_pred_rf_rachis = append(Bonnes_pred_rf_rachis,length(bp.rf)/length(dtest$Blessure_rachis))
+  bp.modlog = which((prev.logit > 0.5 & dtest$Blessure_rachis == "oui")|(prev.logit < 0.5 & dtest$Blessure_rachis == "non"))
+  Bonnes_pred_modlog_rachis = append(Bonnes_pred_modlog_rachis,length(bp.modlog)/length(dtest$Blessure_rachis))
+  bp.nb = which((prev.nb > 0.5 & dtest$Blessure_rachis == "oui")|(prev.nb < 0.5 & dtest$Blessure_rachis == "non"))
+  Bonnes_pred_nb_rachis = append(Bonnes_pred_nb_rachis,length(bp.nb)/length(dtest$Blessure_rachis))
+  bp.modlogCoV <- length(which((prev.modlogCoV >0.5 & dtest2$Blessure_rachis == "oui")|(prev.modlogCoV < 0.5 & dtest2$Blessure_rachis == "non")))
+  Bonnes_pred_modlogCoV_rachis = append(Bonnes_pred_modlogCoV_rachis,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_rachis))
+    bp.modlogCoV_Lasso = prev.modlogCoV_Lasso[prev.modlogCoV_Lasso == dtest2$Blessure_rachis]
+  Bonnes_pred_modlogCoV_Lasso_rachis = append(Bonnes_pred_modlogCoV_Lasso_rachis,length(bp.modlogCoV_Lasso)/length(dtest2$Blessure_rachis))
+}
+```
+
+
+```{r}
+boxplot(S_AUC_rf_rachis,S_AUC_modlog_rachis, S_AUC_nb_rachis, S_AUC_modlogCoV_rachis, S_AUC_modlogCoV_Lasso_rachis, ylab="AUC",col = c("green","purple","red","blue", "yellow"), names = c("random forest","mod log","naive bayes", "CoV", "CoV_Lasso"))
+mean(S_AUC_rf_rachis);median(S_AUC_rf_rachis)
+mean(S_AUC_modlog_rachis);median(S_AUC_modlog_rachis)
+mean(S_AUC_nb_rachis);median(S_AUC_nb_rachis)
+mean(S_AUC_modlogCoV_rachis);median(S_AUC_modlogCoV_rachis)
+mean(S_AUC_modlogCoV_Lasso_rachis);median(S_AUC_modlogCoV_Lasso_rachis)
+
+```
+
+```{r}
+boxplot(Bonnes_pred_rf_rachis, Bonnes_pred_modlog_rachis, Bonnes_pred_nb_rachis, Bonnes_pred_modlogCoV_rachis, Bonnes_pred_modlogCoV_Lasso_rachis, ylab="pourcentage de prédictions correctes",col = c("green","purple","red","blue", "pink"), names = c("random forest","mod log","Naive_Bayes", "CoV", "CoV_Lasso"))
+
+mean(Bonnes_pred_rf_rachis);median(Bonnes_pred_rf_rachis)
+mean(Bonnes_pred_modlog_rachis);median(Bonnes_pred_modlog_rachis)
+mean(Bonnes_pred_nb_rachis);median(Bonnes_pred_nb_rachis)
+mean(Bonnes_pred_modlogCoV_rachis);median(Bonnes_pred_modlogCoV_rachis)
+mean(Bonnes_pred_modlogCoV_Lasso_rachis);median(Bonnes_pred_modlogCoV_Lasso_rachis)
+```
+
+
+```{r, warning=FALSE}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+
+bonnes_proba_elevees_rf <- c()
+bonnes_proba_faibles_rf <- c()
+bonnes_proba_elevees_modlog <- c()
+bonnes_proba_faibles_modlog <- c()
+bonnes_proba_elevees_nb <- c()
+bonnes_proba_faibles_nb <- c()
+
+incertains_rf <- c()
+incertains_modlog <- c()
+incertains_nb <- c()
+
+for (i in 1:1000){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+
+mod.log <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap, data = dapp, laplace = 1, usekernel = FALSE)
+
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+
+rocobj.nb <- roc(dtest$Blessure, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+
+proba_elevee_nb <- dtest[which(prev.nb > 0.7),]
+proba_faible_nb <- dtest[which(prev.nb < 0.3),]
+proba_moyenne_nb <- dtest[which((prev.nb < 0.7) & (prev.nb > 0.3)),]
+
+proba_elevee_nb_vraie <- proba_elevee_nb[which(proba_elevee_nb$Blessure == "oui"),]
+proba_faible_nb_vraie <- proba_faible_nb[which(proba_faible_nb$Blessure == "non"),]
+
+bonnes_proba_elevees_nb <- append(bonnes_proba_elevees_nb, dim(proba_elevee_nb_vraie)[1]/dim(proba_elevee_nb)[1])
+if (length(which(prev.nb < 0.3)) != 0){
+bonnes_proba_faibles_nb <- append(bonnes_proba_faibles_nb, dim(proba_faible_nb_vraie)[1]/dim(proba_faible_nb)[1])}
+
+proba_elevee_modlog <- dtest[which(prev.logit > 0.7),]
+proba_faible_modlog <- dtest[which(prev.logit < 0.3),]
+proba_moyenne_modlog <- dtest[which((prev.logit < 0.7) & (prev.logit > 0.3)),]
+
+proba_elevee_modlog_vraie <- proba_elevee_modlog[which(proba_elevee_modlog$Blessure == "oui"),]
+proba_faible_modlog_vraie <- proba_faible_modlog[which(proba_faible_modlog$Blessure == "non"),]
+
+bonnes_proba_elevees_modlog <- append(bonnes_proba_elevees_modlog, dim(proba_elevee_modlog_vraie)[1]/dim(proba_elevee_modlog)[1])
+if (length(which(prev.logit < 0.3)) != 0){
+bonnes_proba_faibles_modlog <- append(bonnes_proba_faibles_modlog, dim(proba_faible_modlog_vraie)[1]/dim(proba_faible_modlog)[1])}
+
+proba_elevee_rf <- dtest[which(prev.rf > 0.7),]
+proba_faible_rf <- dtest[which(prev.rf < 0.3),]
+proba_moyenne_rf <- dtest[which((prev.rf < 0.7) & (prev.rf > 0.3)),]
+
+proba_elevee_rf_vraie <- proba_elevee_rf[which(proba_elevee_rf$Blessure == "oui"),]
+proba_faible_rf_vraie <- proba_faible_rf[which(proba_faible_rf$Blessure == "non"),]
+
+bonnes_proba_elevees_rf <- append(bonnes_proba_elevees_rf, dim(proba_elevee_rf_vraie)[1]/dim(proba_elevee_rf)[1])
+if (length(which(prev.rf < 0.3)) != 0){
+bonnes_proba_faibles_rf <- append(bonnes_proba_faibles_rf, dim(proba_faible_rf_vraie)[1]/dim(proba_faible_rf)[1])}
+
+incertains_rf <- append(incertains_rf, dim(proba_moyenne_rf)[1])
+incertains_modlog <- append(incertains_modlog, dim(proba_moyenne_modlog)[1])
+incertains_nb <- append(incertains_nb, dim(proba_moyenne_nb)[1])
+}
+```
+
+
+```{r}
+boxplot(bonnes_proba_elevees_rf, bonnes_proba_elevees_modlog, bonnes_proba_elevees_nb, bonnes_proba_faibles_rf, bonnes_proba_faibles_modlog, bonnes_proba_faibles_nb, ylab="proportions bonnes pred blessure et pas bless",col = c("red", "blue", "yellow","red", "blue", "yellow"), names = c("rf","mod log", "nb","rf","mod log", "nb"))
+mean(bonnes_proba_elevees_rf)
+mean(bonnes_proba_elevees_modlog)
+mean(bonnes_proba_elevees_nb)
+mean(bonnes_proba_faibles_rf)
+mean(bonnes_proba_faibles_modlog)
+mean(bonnes_proba_faibles_nb)
+```
+
+```{r, warning=FALSE}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+
+bonnes_proba_elevees_rf <- c()
+bonnes_proba_faibles_rf <- c()
+bonnes_proba_elevees_modlog <- c()
+bonnes_proba_faibles_modlog <- c()
+bonnes_proba_elevees_nb <- c()
+bonnes_proba_faibles_nb <- c()
+
+incertains_rf <- c()
+incertains_modlog <- c()
+incertains_nb <- c()
+
+for (i in 1:1000){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+
+mod.log <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin, data = dapp, laplace = 1, usekernel = FALSE)
+
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+
+rocobj.nb <- roc(dtest$Blessure_MI, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_MI, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_MI, prev.logit, levels = c("non","oui"), direction="<")
+
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+
+proba_elevee_nb <- dtest[which(prev.nb > 0.7),]
+proba_faible_nb <- dtest[which(prev.nb < 0.3),]
+proba_moyenne_nb <- dtest[which((prev.nb < 0.7) & (prev.nb > 0.3)),]
+
+proba_elevee_nb_vraie <- proba_elevee_nb[which(proba_elevee_nb$Blessure_MI == "oui"),]
+proba_faible_nb_vraie <- proba_faible_nb[which(proba_faible_nb$Blessure_MI == "non"),]
+
+bonnes_proba_elevees_nb <- append(bonnes_proba_elevees_nb, dim(proba_elevee_nb_vraie)[1]/dim(proba_elevee_nb)[1])
+if (length(which(prev.nb < 0.3)) != 0){
+bonnes_proba_faibles_nb <- append(bonnes_proba_faibles_nb, dim(proba_faible_nb_vraie)[1]/dim(proba_faible_nb)[1])}
+
+proba_elevee_modlog <- dtest[which(prev.logit > 0.7),]
+proba_faible_modlog <- dtest[which(prev.logit < 0.3),]
+proba_moyenne_modlog <- dtest[which((prev.logit < 0.7) & (prev.logit > 0.3)),]
+
+proba_elevee_modlog_vraie <- proba_elevee_modlog[which(proba_elevee_modlog$Blessure_MI == "oui"),]
+proba_faible_modlog_vraie <- proba_faible_modlog[which(proba_faible_modlog$Blessure_MI == "non"),]
+
+bonnes_proba_elevees_modlog <- append(bonnes_proba_elevees_modlog, dim(proba_elevee_modlog_vraie)[1]/dim(proba_elevee_modlog)[1])
+if (length(which(prev.logit < 0.3)) != 0){
+bonnes_proba_faibles_modlog <- append(bonnes_proba_faibles_modlog, dim(proba_faible_modlog_vraie)[1]/dim(proba_faible_modlog)[1])}
+
+proba_elevee_rf <- dtest[which(prev.rf > 0.7),]
+proba_faible_rf <- dtest[which(prev.rf < 0.3),]
+proba_moyenne_rf <- dtest[which((prev.rf < 0.7) & (prev.rf > 0.3)),]
+
+proba_elevee_rf_vraie <- proba_elevee_rf[which(proba_elevee_rf$Blessure_MI == "oui"),]
+proba_faible_rf_vraie <- proba_faible_rf[which(proba_faible_rf$Blessure_MI == "non"),]
+
+bonnes_proba_elevees_rf <- append(bonnes_proba_elevees_rf, dim(proba_elevee_rf_vraie)[1]/dim(proba_elevee_rf)[1])
+if (length(which(prev.rf < 0.3)) != 0){
+bonnes_proba_faibles_rf <- append(bonnes_proba_faibles_rf, dim(proba_faible_rf_vraie)[1]/dim(proba_faible_rf)[1])}
+
+incertains_rf <- append(incertains_rf, dim(proba_moyenne_rf)[1])
+incertains_modlog <- append(incertains_modlog, dim(proba_moyenne_modlog)[1])
+incertains_nb <- append(incertains_nb, dim(proba_moyenne_nb)[1])
+}
+```
+
+
+```{r}
+boxplot(bonnes_proba_elevees_rf, bonnes_proba_elevees_modlog, bonnes_proba_elevees_nb, bonnes_proba_faibles_rf, bonnes_proba_faibles_modlog, bonnes_proba_faibles_nb, ylab="proportions bonnes pred blessure et pas bless",col = c("red", "blue", "yellow","red", "blue", "yellow"), names = c("rf","mod log", "nb","rf","mod log", "nb"))
+mean(bonnes_proba_elevees_rf)
+mean(bonnes_proba_elevees_modlog)
+mean(bonnes_proba_elevees_nb)
+mean(bonnes_proba_faibles_rf)
+mean(bonnes_proba_faibles_modlog)
+mean(bonnes_proba_faibles_nb)
+```
+```{r}
+boxplot(incertains_rf, incertains_modlog, incertains_nb, ylab="nombre incertains",col = c("red", "blue", "yellow"), names = c("rf","mod log", "nb"))
+mean(incertains_rf)
+mean(incertains_modlog)
+mean(incertains_nb)
+```
+
+
+```{r, warning=FALSE}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+
+bonnes_proba_elevees_rf <- c()
+bonnes_proba_faibles_rf <- c()
+bonnes_proba_elevees_modlog <- c()
+bonnes_proba_faibles_modlog <- c()
+bonnes_proba_elevees_nb <- c()
+bonnes_proba_faibles_nb <- c()
+
+incertains_rf <- c()
+incertains_modlog <- c()
+incertains_nb <- c()
+
+for (i in 1:1000){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+
+mod.log <- glm(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin, data = dapp, laplace = 1, usekernel = FALSE)
+
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+
+rocobj.nb <- roc(dtest$Blessure_MS, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_MS, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_MS, prev.logit, levels = c("non","oui"), direction="<")
+
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+
+proba_elevee_nb <- dtest[which(prev.nb > 0.7),]
+proba_faible_nb <- dtest[which(prev.nb < 0.3),]
+proba_moyenne_nb <- dtest[which((prev.nb < 0.7) & (prev.nb > 0.3)),]
+
+proba_elevee_nb_vraie <- proba_elevee_nb[which(proba_elevee_nb$Blessure_MS == "oui"),]
+proba_faible_nb_vraie <- proba_faible_nb[which(proba_faible_nb$Blessure_MS == "non"),]
+
+bonnes_proba_elevees_nb <- append(bonnes_proba_elevees_nb, dim(proba_elevee_nb_vraie)[1]/dim(proba_elevee_nb)[1])
+if (length(which(prev.nb < 0.3)) != 0){
+bonnes_proba_faibles_nb <- append(bonnes_proba_faibles_nb, dim(proba_faible_nb_vraie)[1]/dim(proba_faible_nb)[1])}
+
+proba_elevee_modlog <- dtest[which(prev.logit > 0.7),]
+proba_faible_modlog <- dtest[which(prev.logit < 0.3),]
+proba_moyenne_modlog <- dtest[which((prev.logit < 0.7) & (prev.logit > 0.3)),]
+
+proba_elevee_modlog_vraie <- proba_elevee_modlog[which(proba_elevee_modlog$Blessure_MS == "oui"),]
+proba_faible_modlog_vraie <- proba_faible_modlog[which(proba_faible_modlog$Blessure_MS == "non"),]
+
+bonnes_proba_elevees_modlog <- append(bonnes_proba_elevees_modlog, dim(proba_elevee_modlog_vraie)[1]/dim(proba_elevee_modlog)[1])
+if (length(which(prev.logit < 0.3)) != 0){
+bonnes_proba_faibles_modlog <- append(bonnes_proba_faibles_modlog, dim(proba_faible_modlog_vraie)[1]/dim(proba_faible_modlog)[1])}
+
+proba_elevee_rf <- dtest[which(prev.rf > 0.7),]
+proba_faible_rf <- dtest[which(prev.rf < 0.3),]
+proba_moyenne_rf <- dtest[which((prev.rf < 0.7) & (prev.rf > 0.3)),]
+
+proba_elevee_rf_vraie <- proba_elevee_rf[which(proba_elevee_rf$Blessure_MS == "oui"),]
+proba_faible_rf_vraie <- proba_faible_rf[which(proba_faible_rf$Blessure_MS == "non"),]
+
+bonnes_proba_elevees_rf <- append(bonnes_proba_elevees_rf, dim(proba_elevee_rf_vraie)[1]/dim(proba_elevee_rf)[1])
+if (length(which(prev.rf < 0.3)) != 0){
+bonnes_proba_faibles_rf <- append(bonnes_proba_faibles_rf, dim(proba_faible_rf_vraie)[1]/dim(proba_faible_rf)[1])}
+
+incertains_rf <- append(incertains_rf, dim(proba_moyenne_rf)[1])
+incertains_modlog <- append(incertains_modlog, dim(proba_moyenne_modlog)[1])
+incertains_nb <- append(incertains_nb, dim(proba_moyenne_nb)[1])
+}
+```
+
+
+```{r}
+boxplot(bonnes_proba_elevees_rf, bonnes_proba_elevees_modlog, bonnes_proba_elevees_nb, bonnes_proba_faibles_rf, bonnes_proba_faibles_modlog, bonnes_proba_faibles_nb, ylab="proportions bonnes pred blessure et pas bless",col = c("red", "blue", "yellow","red", "blue", "yellow"), names = c("rf","mod log", "nb","rf","mod log", "nb"))
+mean(bonnes_proba_elevees_rf)
+mean(bonnes_proba_elevees_modlog)
+mean(bonnes_proba_elevees_nb)
+mean(bonnes_proba_faibles_rf)
+mean(bonnes_proba_faibles_modlog)
+mean(bonnes_proba_faibles_nb)
+```
+```{r}
+boxplot(incertains_rf, incertains_modlog, incertains_nb, ylab="nombre incertains",col = c("red", "blue", "yellow"), names = c("rf","mod log", "nb"))
+mean(incertains_rf)
+mean(incertains_modlog)
+mean(incertains_nb)
+```
+
+
+
+```{r, warning=FALSE}
+S_AUC_tree <- c()
+S_AUC_rf <- c()
+S_AUC_modlog <- c()
+S_AUC_modlog_test <- c()
+S_AUC_nb <- c()
+
+bonnes_proba_elevees_rf <- c()
+bonnes_proba_faibles_rf <- c()
+bonnes_proba_elevees_modlog <- c()
+bonnes_proba_faibles_modlog <- c()
+bonnes_proba_elevees_nb <- c()
+bonnes_proba_faibles_nb <- c()
+
+incertains_rf <- c()
+incertains_modlog <- c()
+incertains_nb <- c()
+
+for (i in 1:1000){
+
+  l = 90
+  perm = sample(nrow(Tab_global))
+  
+  dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_global[-perm[1:l], ]  # Data test
+
+
+mod.log <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin, data = dapp, laplace = 1, usekernel = FALSE)
+
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+
+rocobj.nb <- roc(dtest$Blessure_rachis, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure_rachis, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure_rachis, prev.logit, levels = c("non","oui"), direction="<")
+
+S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
+S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
+S_AUC_nb = append(S_AUC_nb, rocobj.nb$auc)
+
+proba_elevee_nb <- dtest[which(prev.nb > 0.7),]
+proba_faible_nb <- dtest[which(prev.nb < 0.3),]
+proba_moyenne_nb <- dtest[which((prev.nb < 0.7) & (prev.nb > 0.3)),]
+
+proba_elevee_nb_vraie <- proba_elevee_nb[which(proba_elevee_nb$Blessure_rachis == "oui"),]
+proba_faible_nb_vraie <- proba_faible_nb[which(proba_faible_nb$Blessure_rachis == "non"),]
+
+bonnes_proba_elevees_nb <- append(bonnes_proba_elevees_nb, dim(proba_elevee_nb_vraie)[1]/dim(proba_elevee_nb)[1])
+if (length(which(prev.nb < 0.3)) != 0){
+bonnes_proba_faibles_nb <- append(bonnes_proba_faibles_nb, dim(proba_faible_nb_vraie)[1]/dim(proba_faible_nb)[1])}
+
+proba_elevee_modlog <- dtest[which(prev.logit > 0.7),]
+proba_faible_modlog <- dtest[which(prev.logit < 0.3),]
+proba_moyenne_modlog <- dtest[which((prev.logit < 0.7) & (prev.logit > 0.3)),]
+
+proba_elevee_modlog_vraie <- proba_elevee_modlog[which(proba_elevee_modlog$Blessure_rachis == "oui"),]
+proba_faible_modlog_vraie <- proba_faible_modlog[which(proba_faible_modlog$Blessure_rachis == "non"),]
+
+bonnes_proba_elevees_modlog <- append(bonnes_proba_elevees_modlog, dim(proba_elevee_modlog_vraie)[1]/dim(proba_elevee_modlog)[1])
+if (length(which(prev.logit < 0.3)) != 0){
+bonnes_proba_faibles_modlog <- append(bonnes_proba_faibles_modlog, dim(proba_faible_modlog_vraie)[1]/dim(proba_faible_modlog)[1])}
+
+proba_elevee_rf <- dtest[which(prev.rf > 0.7),]
+proba_faible_rf <- dtest[which(prev.rf < 0.3),]
+proba_moyenne_rf <- dtest[which((prev.rf < 0.7) & (prev.rf > 0.3)),]
+
+proba_elevee_rf_vraie <- proba_elevee_rf[which(proba_elevee_rf$Blessure_rachis == "oui"),]
+proba_faible_rf_vraie <- proba_faible_rf[which(proba_faible_rf$Blessure_rachis == "non"),]
+
+bonnes_proba_elevees_rf <- append(bonnes_proba_elevees_rf, dim(proba_elevee_rf_vraie)[1]/dim(proba_elevee_rf)[1])
+if (length(which(prev.rf < 0.3)) != 0){
+bonnes_proba_faibles_rf <- append(bonnes_proba_faibles_rf, dim(proba_faible_rf_vraie)[1]/dim(proba_faible_rf)[1])}
+
+incertains_rf <- append(incertains_rf, dim(proba_moyenne_rf)[1])
+incertains_modlog <- append(incertains_modlog, dim(proba_moyenne_modlog)[1])
+incertains_nb <- append(incertains_nb, dim(proba_moyenne_nb)[1])
+}
+```
+
+
+```{r}
+boxplot(bonnes_proba_elevees_rf, bonnes_proba_elevees_modlog, bonnes_proba_elevees_nb, bonnes_proba_faibles_rf, bonnes_proba_faibles_modlog, bonnes_proba_faibles_nb, ylab="proportions bonnes pred blessure et pas bless",col = c("red", "blue", "yellow","red", "blue", "yellow"), names = c("rf","mod log", "nb","rf","mod log", "nb"))
+mean(bonnes_proba_elevees_rf)
+mean(bonnes_proba_elevees_modlog)
+mean(bonnes_proba_elevees_nb)
+mean(bonnes_proba_faibles_rf)
+mean(bonnes_proba_faibles_modlog)
+mean(bonnes_proba_faibles_nb)
+```
+```{r}
+boxplot(incertains_rf, incertains_modlog, incertains_nb, ylab="nombre incertains",col = c("red", "blue", "yellow"), names = c("rf","mod log", "nb"))
+mean(incertains_rf)
+mean(incertains_modlog)
+mean(incertains_nb)
+```
+
+
+
+
+
+```{r}
+
+
+```
+
+
+
