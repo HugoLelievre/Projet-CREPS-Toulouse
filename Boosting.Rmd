@@ -1,0 +1,148 @@
+---
+title: "Untitled"
+author: "Hugo"
+date: "10/03/2022"
+output: html_document
+---
+
+
+
+
+```{r}
+library(adabag)
+library(caret)
+library(ggplot2)
+
+```
+
+
+```{r}
+Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
+
+Tab_global <- Tab_global[,2:40]
+
+Tab_global$Sport<-as.factor(Tab_global$Sport)
+Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
+Tab_global$Mob_inf_asy = factor(Tab_global$Mob_inf_asy)
+Tab_global$Mob_sup_asy = factor(Tab_global$Mob_sup_asy)
+Tab_global$Entrant = factor(Tab_global$Entrant)
+Tab_global$Doul_act_MI = factor(Tab_global$Doul_act_MI)
+Tab_global$Doul_act_MS = factor(Tab_global$Doul_act_MS)
+#Tab_global$Doul_act_rachis = factor(Tab_global$Doul_act_rachis)
+Tab_global$Blessure = factor(Tab_global$Blessure)
+Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
+Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
+Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
+Tab_global$Blessure_T_T = factor(Tab_global$Blessure_T_T)
+Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
+Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
+Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
+
+Tab_global$Nb_bless <- as.numeric(Tab_global$Nb_bless)
+#Tab_global$`Mob inf asy`<-as.numeric(Tab_global$`Mob inf asy`)
+#Tab_global$`Mob sup asy`<-as.numeric(Tab_global$`Mob sup asy`)
+Tab_global$Mob_inf_droite<-as.numeric(Tab_global$Mob_inf_droite)
+Tab_global$Mob_inf_gauche<-as.numeric(Tab_global$Mob_inf_gauche)
+Tab_global$Mob_sup_droite<-as.numeric(Tab_global$Mob_sup_droite)
+Tab_global$Mob_sup_gauche<-as.numeric(Tab_global$Mob_sup_gauche)
+Tab_global$Mob_inf_bil <-as.numeric(Tab_global$Mob_inf_bil)
+Tab_global$Mob_sup_bil <-as.numeric(Tab_global$Mob_sup_bil)
+Tab_global$Global<-as.numeric(Tab_global$Global)
+#Tab_global$Blessure <- as.numeric(Tab_global$Blessure)
+
+#Tab_global$`Stab pelv asy`<-as.numeric(Tab_global$`Stab pelv asy`)
+
+Tab_global$Ancienne_blessure_MI <-as.numeric(Tab_global$Ancienne_blessure_MI)
+Tab_global$Ancienne_blessure_MS <-as.numeric(Tab_global$Ancienne_blessure_MS)
+Tab_global$Ancienne_blessure_rachis <-as.numeric(Tab_global$Ancienne_blessure_rachis)
+
+Tab_global$Stab_pelv_droite <-as.numeric(Tab_global$Stab_pelv_droite)
+Tab_global$Stab_pelv_gauche<-as.numeric(Tab_global$Stab_pelv_gauche)
+Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
+Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
+Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
+#Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+Tab_global
+```
+
+```{r}
+
+Tab_reduit <- cbind(Tab_global[,1], Tab_global[,13], Tab_global[,21:30], Tab_global[,34:35], Tab_global[,37:38])
+#summary(Tab_reduit)
+Tab_test_boost <- Tab_reduit[,-c(3,5,6,7)]
+summary(Tab_test_boost)
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+```{r}
+l = 90
+perm = sample(nrow(Tab_test_boost))
+  
+dapp = Tab_test_boost[perm[1:l], ]  
+dtest = Tab_test_boost[-perm[1:l], ]
+
+model_adaboost <- boosting(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin + Doul_act_MI, data=dapp, boos=TRUE, mfinal= 50)
+pred_test = predict(model_adaboost, dtest)
+pred_test$confusion
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+```{r}
+
+
+```
+
+
+
+
+```{r}
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
