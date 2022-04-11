@@ -1,0 +1,550 @@
+---
+title: "Clust Of Var"
+output: pdf_document
+---
+```{r}
+library(readxl)
+library(MLmetrics)
+library(randomForest)
+library(ggplot2)
+library(corrplot)
+library(leaps)
+library(bestglm)
+library(ggfortify)
+library(gridExtra)
+library(dplyr)
+library(reshape2)
+library(ROCR)
+library(pROC)
+library(MASS)
+library(partykit)
+library(rpart)
+library(rpart.plot)
+library(glmnet)
+library(ClustOfVar)
+```
+
+```{r}
+Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
+
+Tab_global <- Tab_global[,2:length(Tab_global)]
+
+Tab_global$Sport<-as.factor(Tab_global$Sport)
+Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
+Tab_global$Mob_inf_asy = factor(Tab_global$Mob_inf_asy)
+Tab_global$Mob_sup_asy = factor(Tab_global$Mob_sup_asy)
+Tab_global$Entrant = factor(Tab_global$Entrant)
+Tab_global$Doul_act_MI = factor(Tab_global$Doul_act_MI)
+Tab_global$Doul_act_MS = factor(Tab_global$Doul_act_MS)
+#Tab_global$Doul_act_rachis = factor(Tab_global$Doul_act_rachis)
+Tab_global$Blessure = factor(Tab_global$Blessure)
+Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
+Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
+Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
+Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
+Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
+Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
+
+Tab_global$Nb_bless <- as.numeric(Tab_global$Nb_bless)
+#Tab_global$`Mob inf asy`<-as.numeric(Tab_global$`Mob inf asy`)
+#Tab_global$`Mob sup asy`<-as.numeric(Tab_global$`Mob sup asy`)
+Tab_global$Mob_inf_droite<-as.numeric(Tab_global$Mob_inf_droite)
+Tab_global$Mob_inf_gauche<-as.numeric(Tab_global$Mob_inf_gauche)
+Tab_global$Mob_sup_droite<-as.numeric(Tab_global$Mob_sup_droite)
+Tab_global$Mob_sup_gauche<-as.numeric(Tab_global$Mob_sup_gauche)
+Tab_global$Mob_inf_bil <-as.numeric(Tab_global$Mob_inf_bil)
+Tab_global$Mob_sup_bil <-as.numeric(Tab_global$Mob_sup_bil)
+Tab_global$Global<-as.numeric(Tab_global$Global)
+#Tab_global$Blessure <- as.numeric(Tab_global$Blessure)
+
+#Tab_global$`Stab pelv asy`<-as.numeric(Tab_global$`Stab pelv asy`)
+
+Tab_global$Ancienne_blessure_MI <-as.numeric(Tab_global$Ancienne_blessure_MI)
+Tab_global$Ancienne_blessure_MS <-as.numeric(Tab_global$Ancienne_blessure_MS)
+Tab_global$Ancienne_blessure_rachis <-as.numeric(Tab_global$Ancienne_blessure_rachis)
+
+Tab_global$Stab_pelv_droite <-as.numeric(Tab_global$Stab_pelv_droite)
+Tab_global$Stab_pelv_gauche<-as.numeric(Tab_global$Stab_pelv_gauche)
+Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
+Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
+Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
+#Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+Tab_global
+```
+
+```{r}
+
+Tab_reduit <- cbind(Tab_global[,1], Tab_global[,13], Tab_global[,21:30], Tab_global[,34:35])
+summary(Tab_reduit)
+```
+
+## I. CoV pour prédire Blessure
+
+```{r}
+X_quanti <- cbind(Tab_global[,2:4], Tab_global[,6:8], Tab_global[,10:12], Tab_global[,28] )
+X_quali <- cbind(Tab_global[,1],Tab_global[,24],Tab_global[,32:36])
+
+dendo <- hclustvar(X.quanti = X_quanti, X.quali = X_quali)
+plot (dendo, main = "Dendogram ClustOfVar")
+
+```
+
+```{r}
+stab <- stability (dendo, B=100)
+plot(stab, main = "Stability of the partitions")
+
+```
+
+
+```{r}
+
+partition <- cutreevar(dendo, 6)
+summary(partition)
+
+```
+
+ 
+```{r}
+temp <- partition$scores
+temp <- as.data.frame(temp)
+Blessure <- Tab_global$Blessure
+Tab_red <- cbind(temp,Blessure)
+l = 90
+perm = sample(nrow(Tab_red))
+  
+dapp = Tab_red[perm[1:l], ]  # Data apprentissage
+dtest = Tab_red[-perm[1:l], ]  # Data test
+modlog <- glm(Blessure ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlog <- predict(modlog,newdata = dtest, type = "response")
+length(which((prev.modlog >0.5 & dtest$Blessure == "oui")|(prev.modlog < 0.5 & dtest$Blessure == "non")))
+
+```
+
+ 
+
+```{r}
+seqi <- seq(from = 1, to = 200, by = 1)
+S_AUC_CoV <- c()
+
+for (i in seqi){
+
+  l = 90
+  temp <- partition$scores
+temp <- as.data.frame(temp)
+Blessure <- Tab_global$Blessure
+Tab_red <- cbind(temp,Blessure)
+
+  perm = sample(nrow(Tab_red))
+  dapp = Tab_red[perm[1:l], ] 
+  dtest = Tab_red[-perm[1:l], ]  
+  
+  modlog <- glm(Blessure ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlog <- predict(modlog,newdata = dtest, type = "response")
+nb_bp <- length(which((prev.modlog >0.5 & dtest$Blessure == "oui")|(prev.modlog < 0.5 & dtest$Blessure == "non")))
+
+#modlog <- glm(Blessure ~ partition_8$scores[,1] + partition_8$scores[,2] + partition_8$scores[,3] + partition_8$scores[,4] + partition_8$scores[,5] + partition_8$scores[,6] + partition_8$scores[,7] + partition_8$scores[,8] ,family = "binomial"(link = "logit"), data = dapp)
+
+
+
+##glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+#prev.logit <- predict(mod.log, dtest)
+
+
+
+glm.app.cst <- glm(Blessure ~ 1, family=binomial, data=dapp)
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+
+rocobj.logit <- roc(dtest$Blessure, prev.modlog)
+rocobj.cst <- roc(dtest$Blessure, prev.cst)
+
+S_AUC_CoV = append(S_AUC_CoV, rocobj.logit$auc)
+
+}
+#print(S_AUC_tree/100)
+#print(S_AUC_rf/100)
+#print(S_AUC_modlog/100)
+#print(S_AUC_modlog_AIC/100)
+```
+
+
+```{r}
+boxplot(S_AUC_CoV)
+
+#S_AUC_rf
+```
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.mat <- model.matrix(Blessure ~ .-1, data = Tab_red)
+
+reg.lasso <- glmnet(y = Tab_red$Blessure, x = x.mat, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red$Blessure, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+
+```{r}
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+```{r}
+S_AUC_modlogCoV <- c()
+S_AUC_modlogCoV_Lasso <- c()
+
+
+Bonnes_pred_modlogCoV <- c()
+Bonnes_pred_modlogCoV_Lasso <- c()
+
+for (i in 1:100){
+
+  l = 90
+  perm = sample(nrow(Tab_red))
+  
+  dapp = Tab_red[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_red[-perm[1:l], ]  # Data test
+
+  modlogCoV <- glm(Blessure ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV <- predict(modlogCoV,newdata = dtest, type = "response")
+nb_bp <- length(which((prev.modlogCoV >0.5 & dtest$Blessure == "oui")|(prev.modlogCoV < 0.5 & dtest$Blessure == "non")))
+
+rocobj.logCoV <- roc(dtest$Blessure, prev.modlogCoV, levels = c("non","oui"), direction="<")
+S_AUC_modlogCoV = append(S_AUC_modlogCoV, rocobj.logCoV$auc)
+
+
+modlogCoV_Lasso <- glm(Blessure ~ cluster1 + cluster3 + cluster5 + cluster6 , data = dapp, family=binomial(link="logit"))
+
+prev.modlogCoV_Lasso <- predict(modlogCoV_Lasso, newdata=dtest, type="response")
+rocobj.logCoV_Lasso <- roc(dtest$Blessure, prev.modlogCoV_Lasso, levels = c("non","oui"), direction="<")
+  
+  
+S_AUC_modlogCoV_Lasso = append(S_AUC_modlogCoV_Lasso, rocobj.logCoV_Lasso$auc)
+                    
+  bp.modlogCoV = prev.modlogCoV[prev.modlogCoV == dtest$Blessure]
+  Bonnes_pred_modlogCoV = append(Bonnes_pred_modlogCoV,length(bp.modlogCoV)/length(dtest$Blessure))
+  bp.modlogCoV_Lasso = prev.modlogCoV_Lasso[prev.modlogCoV_Lasso == dtest$Blessure]
+  Bonnes_pred_modlogCoV_Lasso = append(Bonnes_pred_modlogCoV_Lasso,length(bp.modlogCoV_Lasso)/length(dtest$Blessure))
+}
+```
+
+```{r}
+boxplot(S_AUC_modlogCoV,S_AUC_modlogCoV_Lasso, ylab="AUC",col = c("red","blue"), names = c("CoV","CoV_Lasso"))
+mean(S_AUC_modlogCoV);median(S_AUC_modlogCoV)
+mean(S_AUC_modlogCoV_Lasso);median(S_AUC_modlogCoV_Lasso)
+
+```
+
+## II. CoV pour prédire Bless_MI
+
+```{r}
+temp2 <- partition$scores
+temp2 <- as.data.frame(temp)
+Blessure_MI <- Tab_global$Blessure_MI
+Tab_red_MI <- cbind(temp2,Blessure_MI)
+l = 90
+perm = sample(nrow(Tab_red_MI))
+  
+dapp = Tab_red_MI[perm[1:l], ]  # Data apprentissage
+dtest = Tab_red_MI[-perm[1:l], ]  # Data test
+modlogCoV_MI <- glm(Blessure_MI ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_MI <- predict(modlogCoV_MI,newdata = dtest, type = "response")
+length(which((prev.modlogCoV_MI >0.5 & dtest$Blessure_MI == "oui")|(prev.modlogCoV_MI < 0.5 & dtest$Blessure_MI == "non")))
+
+```
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.matMI <- model.matrix(Blessure_MI ~ .-1, data = Tab_red_MI)
+
+reg.lasso <- glmnet(y = Tab_red_MI$Blessure_MI, x = x.matMI, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_MI$Blessure_MI, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.1se),col="red")
+```
+
+
+
+```{r}
+seqi <- seq(from = 1, to = 10, by = 1)
+S_AUC_modlogCoV_MI <- c()
+S_AUC_modlogCoV_Lasso_MI <- c()
+
+
+Bonnes_pred_modlogCoV_MI <- c()
+Bonnes_pred_modlogCoV_Lasso_MI <- c()
+
+for (i in seqi){
+
+  l = 90
+  perm = sample(nrow(Tab_red_MI))
+  
+  dapp = Tab_red_MI[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_red_MI[-perm[1:l], ]  # Data test
+
+  modlogCoV_MI <- glm(Blessure_MI ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_MI <- predict(modlogCoV_MI,newdata = dtest, type = "response")
+nb_bp <- length(which((prev.modlogCoV_MI >0.5 & dtest$Blessure_MI == "oui")|(prev.modlogCoV_MI < 0.5 & dtest$Blessure_MI == "non")))
+
+rocobj.logCoV_MI <- roc(dtest$Blessure_MI, prev.modlogCoV_MI)
+S_AUC_modlogCoV_MI = append(S_AUC_modlogCoV_MI, rocobj.logCoV_MI$auc)
+
+
+modlogCoV_Lasso_MI <- glm(Blessure_MI ~ cluster1 + cluster3 + cluster4 + cluster5 + cluster6, data = dapp, family=binomial(link="logit"))
+
+prev.modlogCoV_Lasso_MI <- predict(modlogCoV_Lasso_MI, newdata=dtest, type="response")
+rocobj.logCoV_Lasso_MI  <- roc(dtest$Blessure_MI, prev.modlogCoV_Lasso_MI, levels = c("non","oui"), direction="<")
+  
+  
+S_AUC_modlogCoV_Lasso_MI = append(S_AUC_modlogCoV_Lasso_MI, rocobj.logCoV_Lasso_MI$auc)
+                    
+  bp.modlogCoV_MI = prev.modlogCoV_MI[prev.modlogCoV_MI == dtest$Blessure_MI]
+  Bonnes_pred_modlogCoV_MI = append(Bonnes_pred_modlogCoV_MI,length(bp.modlogCoV_MI)/length(dtest$Blessure_MI))
+  bp.modlogCoV_Lasso_MI = prev.modlogCoV_Lasso_MI[prev.modlogCoV_Lasso_MI == dtest$Blessure_MI]
+  Bonnes_pred_modlogCoV_Lasso_MI = append(Bonnes_pred_modlogCoV_Lasso_MI,length(bp.modlogCoV_Lasso_MI)/length(dtest$Blessure_MI))
+}
+```
+
+```{r}
+boxplot(S_AUC_modlogCoV_MI,S_AUC_modlogCoV_Lasso_MI, ylab="AUC",col = c("red","blue"), names = c("CoV_MI","CoV_Lasso_MI"))
+mean(S_AUC_modlogCoV_MI);median(S_AUC_modlogCoV_MI)
+mean(S_AUC_modlogCoV_Lasso_MI);median(S_AUC_modlogCoV_Lasso_MI)
+
+```
+
+## III. CoV pour prédire Bless_MS
+
+```{r}
+temp3 <- partition$scores
+temp3 <- as.data.frame(temp)
+Blessure_MS <- Tab_global$Blessure_MS
+Tab_red_MS <- cbind(temp3,Blessure_MS)
+l = 90
+perm = sample(nrow(Tab_red_MS))
+  
+dapp = Tab_red_MS[perm[1:l], ]  # Data apprentissage
+dtest = Tab_red_MS[-perm[1:l], ]  # Data test
+modlogCoV_MS <- glm(Blessure_MS ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_MS <- predict(modlogCoV_MS,newdata = dtest, type = "response")
+length(which((prev.modlogCoV_MS >0.5 & dtest$Blessure_MS == "oui")|(prev.modlogCoV_MS < 0.5 & dtest$Blessure_MS == "non")))
+
+```
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.matMS <- model.matrix(Blessure_MS ~ .-1, data = Tab_red_MS)
+
+reg.lasso <- glmnet(y = Tab_red_MS$Blessure_MS, x = x.matMS, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_MS$Blessure_MS, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+```{r}
+seqi <- seq(from = 1, to = 10, by = 1)
+S_AUC_modlogCoV_MS <- c()
+S_AUC_modlogCoV_Lasso_MS <- c()
+
+
+Bonnes_pred_modlogCoV_MS <- c()
+Bonnes_pred_modlogCoV_Lasso_MS <- c()
+
+for (i in seqi){
+
+  l = 90
+  perm = sample(nrow(Tab_red_MS))
+  
+  dapp = Tab_red_MS[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_red_MS[-perm[1:l], ]  # Data test
+
+  modlogCoV_MS <- glm(Blessure_MS ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_MS <- predict(modlogCoV_MS,newdata = dtest, type = "response")
+nb_bp <- length(which((prev.modlogCoV_MS >0.5 & dtest$Blessure_MS == "oui")|(prev.modlogCoV_MS < 0.5 & dtest$Blessure_MS == "non")))
+
+rocobj.logCoV_MS <- roc(dtest$Blessure_MS, prev.modlogCoV_MS)
+S_AUC_modlogCoV_MS = append(S_AUC_modlogCoV_MS, rocobj.logCoV_MS$auc)
+
+
+modlogCoV_Lasso_MS <- glm(Blessure_MS ~ cluster1 + cluster2 + cluster6, data = dapp, family=binomial(link="logit"))
+
+prev.modlogCoV_Lasso_MS <- predict(modlogCoV_Lasso_MS, newdata=dtest, type="response")
+rocobj.logCoV_Lasso_MS  <- roc(dtest$Blessure_MS, prev.modlogCoV_Lasso_MS, levels = c("non","oui"), direction="<")
+  
+  
+S_AUC_modlogCoV_Lasso_MS = append(S_AUC_modlogCoV_Lasso_MS, rocobj.logCoV_Lasso_MS$auc)
+                    
+  bp.modlogCoV_MS = prev.modlogCoV_MS[prev.modlogCoV_MS == dtest$Blessure_MS]
+  Bonnes_pred_modlogCoV_MS = append(Bonnes_pred_modlogCoV_MS,length(bp.modlogCoV_MS)/length(dtest$Blessure_MS))
+  bp.modlogCoV_Lasso_MS = prev.modlogCoV_Lasso_MS[prev.modlogCoV_Lasso_MS == dtest$Blessure_MS]
+  Bonnes_pred_modlogCoV_Lasso_MS = append(Bonnes_pred_modlogCoV_Lasso_MS,length(bp.modlogCoV_Lasso_MS)/length(dtest$Blessure_MS))
+}
+```
+
+```{r}
+boxplot(S_AUC_modlogCoV_MS,S_AUC_modlogCoV_Lasso_MS, ylab="AUC",col = c("red","blue"), names = c("CoV_MS","CoV_Lasso_MS"))
+mean(S_AUC_modlogCoV_MS);median(S_AUC_modlogCoV_MS)
+mean(S_AUC_modlogCoV_Lasso_MS);median(S_AUC_modlogCoV_Lasso_MS)
+
+```
+## IV. CoV pour prédire Blessure_Rachis
+
+```{r}
+temp4 <- partition$scores
+temp4 <- as.data.frame(temp4)
+Blessure_rachis <- Tab_global$Blessure_rachis
+Tab_red_Rachis <- cbind(temp4,Blessure_rachis)
+l = 90
+perm = sample(nrow(Tab_red_Rachis))
+  
+dapp = Tab_red_Rachis[perm[1:l], ]  # Data apprentissage
+dtest = Tab_red_Rachis[-perm[1:l], ]  # Data test
+modlogCoV_rachis <- glm(Blessure_rachis ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_rachis <- predict(modlogCoV_rachis,newdata = dtest, type = "response")
+length(which((prev.modlogCoV_rachis >0.5 & dtest$Blessure_rachis == "oui")|(prev.modlogCoV_rachis < 0.5 & dtest$Blessure_rachis == "non")))
+
+```
+
+```{r}
+
+# avec toutes les variables, créer d'abord la matrice d'expériences 
+# avec 'model.matrix' (penser à retirer l'intercept du modèle)
+x.matRachis <- model.matrix(Blessure_rachis ~ .-1, data = Tab_red_Rachis)
+
+reg.lasso <- glmnet(y = Tab_red_Rachis$Blessure_rachis, x = x.matRachis, family = "binomial")
+options(repr.plot.width = 12, repr.plot.height = 10)
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+legend("topright", 
+       legend = paste(1:ncol(x.mat), " - ", colnames(x.mat)))
+```
+```{r}
+#x.mat
+reg.lasso.cv <- cv.glmnet(y = Tab_red_Rachis$Blessure_rachis, x = x.mat, family = "binomial")
+plot(reg.lasso.cv)
+
+```
+
+```{r}
+
+```
+
+```{r}
+paste("CV estimate of lambda :", round(reg.lasso.cv$lambda.min, 3))
+# modèle correspondant
+coef(reg.lasso.cv, s = "lambda.min")
+
+plot(reg.lasso, xvar = "lambda", label = TRUE)
+abline(v=log(reg.lasso.cv$lambda.min),col="red")
+```
+
+```{r}
+seqi <- seq(from = 1, to = 10, by = 1)
+S_AUC_modlogCoV_Rachis <- c()
+S_AUC_modlogCoV_Lasso_Rachis <- c()
+
+
+Bonnes_pred_modlogCoV_Rachis <- c()
+Bonnes_pred_modlogCoV_Lasso_Rachis <- c()
+
+for (i in seqi){
+
+  l = 90
+  perm = sample(nrow(Tab_red_Rachis))
+  
+  dapp = Tab_red_Rachis[perm[1:l], ]  # Data apprentissage
+  dtest = Tab_red_Rachis[-perm[1:l], ]  # Data test
+
+  modlogCoV_Rachis <- glm(Blessure_rachis ~ .,family = binomial(link="logit"), data = dapp)
+
+prev.modlogCoV_Rachis <- predict(modlogCoV_Rachis,newdata = dtest, type = "response")
+nb_bp <- length(which((prev.modlogCoV_Rachis >0.5 & dtest$Blessure_rachis == "oui")|(prev.modlogCoV_Rachis < 0.5 & dtest$Blessure_rachis == "non")))
+
+rocobj.logCoV_Rachis <- roc(dtest$Blessure_rachis, prev.modlogCoV_MS)
+S_AUC_modlogCoV_Rachis = append(S_AUC_modlogCoV_Rachis, rocobj.logCoV_Rachis$auc)
+
+
+modlogCoV_Lasso_Rachis <- glm(Blessure_rachis ~ cluster1 + cluster3 + cluster4 + cluster5, data = dapp, family=binomial(link="logit"))
+
+prev.modlogCoV_Lasso_Rachis <- predict(modlogCoV_Lasso_Rachis, newdata=dtest, type="response")
+rocobj.logCoV_Lasso_Rachis  <- roc(dtest$Blessure_rachis, prev.modlogCoV_Lasso_Rachis, levels = c("non","oui"), direction="<")
+  
+  
+S_AUC_modlogCoV_Lasso_Rachis = append(S_AUC_modlogCoV_Lasso_Rachis, rocobj.logCoV_Lasso_Rachis$auc)
+                    
+  bp.modlogCoV_Rachis = prev.modlogCoV_Rachis[prev.modlogCoV_Rachis == dtest$Blessure_rachis]
+  Bonnes_pred_modlogCoV_Rachis = append(Bonnes_pred_modlogCoV_Rachis,length(bp.modlogCoV_Rachis)/length(dtest$Blessure_rachis))
+  bp.modlogCoV_Lasso_Rachis = prev.modlogCoV_Lasso_Rachis[prev.modlogCoV_Lasso_Rachis == dtest$Blessure_rachis]
+  Bonnes_pred_modlogCoV_Lasso_Rachis= append(Bonnes_pred_modlogCoV_Lasso_Rachis,length(bp.modlogCoV_Lasso_Rachis)/length(dtest$Blessure_rachis))
+}
+```
+
+```{r}
+boxplot(S_AUC_modlogCoV_Rachis,S_AUC_modlogCoV_Lasso_Rachis, ylab="AUC",col = c("red","blue"), names = c("CoV_Rachis","CoV_Lasso_Rachis"))
+mean(S_AUC_modlogCoV_Rachis);median(S_AUC_modlogCoV_Rachis)
+mean(S_AUC_modlogCoV_Lasso_Rachis);median(S_AUC_modlogCoV_Lasso_Rachis)
+
+```
