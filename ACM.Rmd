@@ -30,7 +30,7 @@ library(rpart.plot)
 ```{r}
 Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
 
-Tab_global <- Tab_global[,2:43]
+Tab_global <- Tab_global[,2:length(Tab_global)]
 
 Tab_global$Sport<-as.factor(Tab_global$Sport)
 Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
@@ -44,7 +44,6 @@ Tab_global$Blessure = factor(Tab_global$Blessure)
 Tab_global$Blessure_MI = factor(Tab_global$Blessure_MI)
 Tab_global$Blessure_MS = factor(Tab_global$Blessure_MS)
 Tab_global$Blessure_rachis = factor(Tab_global$Blessure_rachis)
-Tab_global$Blessure_T_T = factor(Tab_global$Blessure_T_T)
 Tab_global$Ancienne_blessure_MI_bin = factor(Tab_global$Ancienne_blessure_MI_bin)
 Tab_global$Ancienne_blessure_MS_bin = factor(Tab_global$Ancienne_blessure_MS_bin)
 Tab_global$Ancienne_blessure_rachis_bin = factor(Tab_global$Ancienne_blessure_rachis_bin)
