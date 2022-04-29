@@ -140,6 +140,25 @@ fviz_mca_ind (res.mca, label = "none",axes = c(1,2), habillage = "Blessure",addE
 ```
 
 ```{r}
+count.MI <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  n = c(52, 38, 33),
+  prop = c(42.2, 30.9, 26.8)
+)
+
+count.MI <- count.MI %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
+
+ggplot(count.MI, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Durée d'indisponibilité pour les blessures aux MI")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
 
 ```
 

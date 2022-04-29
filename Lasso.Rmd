@@ -246,7 +246,7 @@ plot(stab, main = "Stability of the partitions")
 
 partition <- cutreevar(dendo, 6)
 summary(partition)
-
+#dendo$
 ```
 ## II. I - CoV+Lasso pour expliquer Blessure
 
@@ -643,6 +643,7 @@ S_AUC_tree = append(S_AUC_tree, rocobj.tree$auc)
 S_AUC_rf = append(S_AUC_rf, rocobj.rf$auc)
 S_AUC_modlog = append(S_AUC_modlog, rocobj.logit$auc)
 S_AUC_modlog_test = append(S_AUC_modlog_test, rocobj.logit.test$auc)
+
 
   bp.tree = prev.tree3[prev.tree3 == dtest$Blessure]
   Bonnes_pred_tree = append(Bonnes_pred_tree,length(bp.tree)/length(dtest$Blessure))
@@ -1556,6 +1557,42 @@ mean(incertains_nb)
 ```{r}
 
 
+```
+
+
+
+```{r}
+l = 90
+perm = sample(nrow(Tab_global))
+  
+dapp = Tab_global[perm[1:l], ]  # Data apprentissage
+dtest = Tab_global[-perm[1:l], ]  # Data test
+
+  tree.reg3 = rpart(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = dapp, control=rpart.control(minsplit = 5, cp = 0, maxdepth = 5))
+
+mod.log <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv ,data = dapp, family=binomial(link="logit"))
+glm.app.logit <- glm(mod.log$formula, family=binomial, data=dapp)
+
+output.forest <- randomForest(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = dapp, mtry = 2, keep.forest = T)
+
+mod.naive.bayes <- naive_bayes(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv, data = dapp, laplace = 1, usekernel = FALSE, quiet = T)
+
+glm.app.cst <- glm(Blessure ~ 1, family=binomial, data=dapp)
+
+prev.cst <- predict(glm.app.cst, newdata=dtest, type="response")
+prev.logit <- predict(mod.log, type = "response", newdata = dtest)
+prev.nb <- predict(mod.naive.bayes, newdata = dtest, type = 'prob')[,2]
+prev.tree <- predict(tree.reg3, type = "prob", newdata = dtest)[, 2]
+#prev.tree3 <- predict(tree.reg3, newdata=dtest, type="class")
+prev.rf <- predict(output.forest, newdata = dtest, type = "prob")[, 2]
+
+rocobj.nb <- roc(dtest$Blessure, prev.nb, levels = c("non","oui"), direction="<")
+rocobj.rf <- roc(dtest$Blessure, prev.rf, levels = c("non","oui"), direction="<")
+rocobj.tree <- roc(dtest$Blessure, prev.tree, levels = c("non","oui"), direction="<")
+rocobj.logit <- roc(dtest$Blessure, prev.logit, levels = c("non","oui"), direction="<")
+rocobj.cst <- roc(dtest$Blessure, prev.cst, levels = c("non","oui"), direction="<")
+
+ggroc(list(cst = rocobj.cst, logit = rocobj.logit, tree = rocobj.tree, random.forest=rocobj.rf, naive.bayes = rocobj.nb))
 ```
 
 
