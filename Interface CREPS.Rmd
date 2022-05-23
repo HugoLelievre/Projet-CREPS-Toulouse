@@ -7,28 +7,26 @@ output: html_document
 ```{r}
 library(shiny)
 library(readxl)
-library(MLmetrics)
-library(randomForest)
+#library(MLmetrics)
+#library(randomForest)
 library(ggplot2)
-library(leaps)
-library(bestglm)
-library(ggfortify)
-library(gridExtra)
+#library(leaps)
+#library(bestglm)
+#library(ggfortify)
+#library(gridExtra)
 library(dplyr)
-library(reshape2)
-library(ROCR)
-library(pROC)
-library(MASS)
-library(partykit)
-library(glmnet)
-library(naivebayes)
+#library(reshape2)
+#library(ROCR)
+#library(pROC)
+#library(MASS)
+#library(partykit)
+#library(glmnet)
+#library(naivebayes)
 ```
 
 
 ```{r}
-Tab_global <- read_excel("fichier arbre 1.xlsx", col_names = TRUE)
-
-Tab_global <- Tab_global[,2:length(Tab_global)]
+Tab_global <- read_excel("fichier interface CREPS.xlsx", col_names = TRUE)
 
 Tab_global$Sport<-as.factor(Tab_global$Sport)
 Tab_global$Stab_pelv_asy= factor(Tab_global$Stab_pelv_asy)
@@ -82,11 +80,6 @@ Indispo$duree<-as.factor(Indispo$duree)
 
 
 ```{r}
-summary(Indispo)
-```
-
-
-```{r}
 mod.log.bless <- glm(Blessure ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Somme_stab_pelv,data = Tab_global, family=binomial(link="logit"))
 
 mod.log.bless.MI <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin + Stab_core_scap + Ancienne_blessure_MS_bin,data = Tab_global, family=binomial(link="logit"))
@@ -94,11 +87,6 @@ mod.log.bless.MI <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin
 mod.log.bless.MS <- glm(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin,data = Tab_global, family=binomial(link="logit"))
 
 mod.log.bless.rachis <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = Tab_global, family=binomial(link="logit"))
-```
-
-```{r}
-
-  prop
 ```
 
 
