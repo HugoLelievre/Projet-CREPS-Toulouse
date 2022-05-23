@@ -8,7 +8,7 @@ output: html_document
 library(shiny)
 library(readxl)
 #library(MLmetrics)
-#library(randomForest)
+library(randomForest)
 library(ggplot2)
 #library(leaps)
 #library(bestglm)
@@ -21,7 +21,7 @@ library(dplyr)
 #library(MASS)
 #library(partykit)
 #library(glmnet)
-#library(naivebayes)
+library(naivebayes)
 ```
 
 
@@ -86,11 +86,15 @@ mod.log.bless.MI <- glm(Blessure_MI ~ Sport + Entrant + Ancienne_blessure_MI_bin
 
 mod.log.bless.MS <- glm(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin,data = Tab_global, family=binomial(link="logit"))
 
-mod.log.bless.rachis <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = Tab_global, family=binomial(link="logit"))
+#output.forest.MS <- randomForest(Blessure_MS ~ Sport + Somme_mob_sup + Ancienne_blessure_MS_bin,data = Tab_global, mtry = 2, keep.forest = T)
+
+#mod.log.bless.rachis <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = Tab_global, family=binomial(link="logit"))
+
+mod.naive.bayes.Rachis <- naive_bayes(Blessure_rachis ~ Sport + Stab_core_scap + Entrant + Somme_stab_pelv + Ancienne_blessure_MI_bin,data = Tab_global, laplace = 1, usekernel = FALSE, quiet = T)
 ```
 
 
-```{r}
+```{r, warning=FALSE}
 ui <- fluidPage(
   titlePanel("Prediction des blessures"),
   sidebarLayout(
@@ -210,7 +214,7 @@ server <- function(input, output) {
     print(paste("Probabilité d'être blessé aux membres sup : ",predict(mod.log.bless.MS, type = "response", newdata = nouveau_sportif())))
   })
   output$proba_blessure_rachis <- renderText({
-    print(paste("Probabilité d'être blessé au rachis/tronc : ",predict(mod.log.bless.rachis, type = "response", newdata = nouveau_sportif())))
+    print(paste("Probabilité d'être blessé au rachis/tronc : ",predict(mod.naive.bayes.Rachis, newdata = nouveau_sportif(), type = 'prob')[,2]))
   })
   output$cam_MI <- renderPlot({
     count.MI <- data.frame(
