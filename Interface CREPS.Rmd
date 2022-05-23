@@ -10,7 +10,6 @@ library(readxl)
 library(MLmetrics)
 library(randomForest)
 library(ggplot2)
-library(corrplot)
 library(leaps)
 library(bestglm)
 library(ggfortify)
@@ -21,11 +20,8 @@ library(ROCR)
 library(pROC)
 library(MASS)
 library(partykit)
-library(rpart)
-library(rpart.plot)
 library(glmnet)
 library(naivebayes)
-library(ClustOfVar)
 ```
 
 
@@ -75,11 +71,18 @@ Tab_global$Stab_core <-as.numeric(Tab_global$Stab_core)
 Tab_global$Stab_core_scap <-as.numeric(Tab_global$Stab_core_scap)
 Tab_global$Stab_scapulaire <-as.numeric(Tab_global$Stab_scapulaire)
 #Tab_global$`Stab scapulaire`<-as.numeric(Tab_global$`Stab scapulaire`)
+
+Indispo <- read_excel("Indispo.xlsx", col_names = TRUE)
+
+Indispo$sport<-as.factor(Indispo$sport)
+Indispo$zone<-as.factor(Indispo$zone)
+Indispo$duree<-as.factor(Indispo$duree)
 ```
 
 
 
 ```{r}
+summary(Indispo)
 ```
 
 
@@ -94,8 +97,9 @@ mod.log.bless.rachis <- glm(Blessure_rachis ~ Sport + Stab_core_scap + Entrant +
 ```
 
 ```{r}
-```
 
+  prop
+```
 
 
 ```{r}
@@ -144,15 +148,29 @@ ui <- fluidPage(
       tableOutput("values"),
       textOutput("proba_blessure"),
       textOutput("proba_blessure_MI"),
-      plotOutput("cam_MI"),
+      fluidRow(
+        column(6,plotOutput("cam_MI")),
+        column(6,plotOutput("cam_MI_sport"))
+        ),
       textOutput("proba_blessure_MS"),
-      plotOutput("cam_MS"),
+      fluidRow(
+        column(6,plotOutput("cam_MS")),
+        column(6,plotOutput("cam_MS_sport"))
+        ),
       textOutput("proba_blessure_rachis"),
-      plotOutput("cam_rachis"),
+      fluidRow(
+        column(6,plotOutput("cam_Rachis")),
+        column(6,plotOutput("cam_Rachis_sport"))
+        ),
     )
   )
 )
 server <- function(input, output) {
+  Indispo <- read_excel("Indispo.xlsx", col_names = TRUE)
+  Indispo$sport<-as.factor(Indispo$sport)
+  Indispo$zone<-as.factor(Indispo$zone)
+  Indispo$duree<-as.factor(Indispo$duree)
+  
   sliderValues <- reactive({
     data.frame(
       Name = c("Sport",
@@ -187,6 +205,12 @@ server <- function(input, output) {
       Ancienne_blessure_MI_bin = input$Ancienne_bless_MI_bin,
       Ancienne_blessure_MS_bin = input$Ancienne_bless_MS_bin)
   })
+  
+  user <- reactive({
+    data.frame(
+      Sport = input$Sport)
+  })
+  
   output$proba_blessure <- renderText({
     print(paste("Probabilité d'être blessé au cours de l'année : ",predict(mod.log.bless, type = "response", newdata = nouveau_sportif())))
   })
@@ -203,8 +227,9 @@ server <- function(input, output) {
   output$cam_MI <- renderPlot({
     count.MI <- data.frame(
   class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
-  n = c(52, 38, 33),
-  prop = c(42.2, 30.9, 26.8)
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="MI"),])[1]*100/dim(Indispo[which(Indispo$zone=="MI"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="MI"),])[1]*100/dim(Indispo[which(Indispo$zone=="MI"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="MI"),])[1]*100/dim(Indispo[which(Indispo$zone=="MI"),])[1],1))
 )
 
 count.MI <- count.MI %>%
@@ -214,7 +239,31 @@ count.MI <- count.MI %>%
 mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
 
 ggplot(count.MI, aes(x = "", y = prop, fill = class)) +
-  ggtitle("Durée d'indisponibilité pour les blessures aux MI")+
+  ggtitle("Indispo pour les blessures aux MI")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+  
+  output$cam_MI_sport <- renderPlot({
+    count.MI.sport <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MI" & Indispo$sport == user()$Sport),])[1],1))
+)
+
+
+count.MI.sport <- count.MI.sport %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
+
+ggplot(count.MI.sport, aes(x = "", y = prop, fill = class)) +
+  ggtitle(paste("idem mais uniquement avec",user()$Sport))+
   geom_bar(width = 1, stat = "identity", color = "white") +
   coord_polar("y", start = 0)+
   geom_text(aes(y = lab.ypos, label = prop), color = "black")+
@@ -225,8 +274,9 @@ ggplot(count.MI, aes(x = "", y = prop, fill = class)) +
     output$cam_MS <- renderPlot({
     count.MS <- data.frame(
   class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
-  n = c(17, 18, 6),
-  prop = c(41.5, 43.9, 14.6)
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="MS"),])[1]*100/dim(Indispo[which(Indispo$zone=="MS"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="MS"),])[1]*100/dim(Indispo[which(Indispo$zone=="MS"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="MS"),])[1]*100/dim(Indispo[which(Indispo$zone=="MS"),])[1],1))
 )
 
 count.MS <- count.MS %>%
@@ -236,7 +286,7 @@ count.MS <- count.MS %>%
 mycols <- c("#FF9900", "#FF6600", "#FF3300")
 
 ggplot(count.MS, aes(x = "", y = prop, fill = class)) +
-  ggtitle("Durée d'indisponibilité pour les blessures aux MS")+
+  ggtitle("Indispo pour les blessures aux MS")+
   geom_bar(width = 1, stat = "identity", color = "white") +
   coord_polar("y", start = 0)+
   geom_text(aes(y = lab.ypos, label = prop), color = "black")+
@@ -244,21 +294,69 @@ ggplot(count.MS, aes(x = "", y = prop, fill = class)) +
   theme_void()
   })
     
-  output$cam_rachis <- renderPlot({
-    count.rachis <- data.frame(
+  output$cam_MS_sport <- renderPlot({
+    count.MS.sport <- data.frame(
   class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
-  n = c(41, 2, 6),
-  prop = c(83.7, 4.1, 12.2)
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="MS" & Indispo$sport == user()$Sport),])[1],1))
 )
 
-count.rachis <- count.rachis %>%
+    count.MS.sport <- count.MS.sport %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#FF9900", "#FF6600", "#FF3300")
+
+ggplot(count.MS.sport, aes(x = "", y = prop, fill = class)) +
+  ggtitle(paste("idem mais uniquement avec",user()$Sport))+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+    
+  output$cam_Rachis <- renderPlot({
+    count.Rachis <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="Rachis"),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="Rachis"),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis"),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="Rachis"),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis"),])[1],1))
+)
+    
+count.Rachis <- count.Rachis %>%
   arrange(desc(class)) %>%
   mutate(lab.ypos = cumsum(prop) - 0.5*prop)
 
 mycols <- c("#CCFF66", "#66FF33", "#66CC33")
 
-ggplot(count.rachis, aes(x = "", y = prop, fill = class)) +
-  ggtitle("Durée d'indisponibilité pour les blessures au rachis/tronc")+
+ggplot(count.Rachis, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Indispo pour les blessures au rachis/tronc")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+  
+  output$cam_Rachis_sport <- renderPlot({
+    count.Rachis.sport <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  prop = c(round(dim(Indispo[which(Indispo$duree==1 & Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==2 & Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1],1),
+        round(dim(Indispo[which(Indispo$duree==3 & Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1]*100/dim(Indispo[which(Indispo$zone=="Rachis" & Indispo$sport == user()$Sport),])[1],1))
+)
+
+
+count.Rachis.sport <- count.Rachis.sport %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFF66", "#66FF33", "#66CC33")
+
+ggplot(count.Rachis.sport, aes(x = "", y = prop, fill = class)) +
+  ggtitle(paste("idem mais uniquement avec",user()$Sport))+
   geom_bar(width = 1, stat = "identity", color = "white") +
   coord_polar("y", start = 0)+
   geom_text(aes(y = lab.ypos, label = prop), color = "black")+
@@ -270,24 +368,127 @@ shinyApp(ui, server)
 ```
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ```{r}
+ui <- fluidPage(
+  titlePanel("Prediction des blessures"),
+  sidebarLayout(
+    sidebarPanel(
+      h3("Donnees du sportif", align = "center"),
+      
+      selectInput(inputId = "Sport",
+                  label = "Choisir le sport :",
+                  choices = c("Aviron", "Baseball", "Basket","Bowling","Nat Synchro","Natation","Rugby","Savate")),
+      
+    ),
+    mainPanel(
+      h3("Récap du sportif", align = "center"),
+      
+      textOutput("test"),
+      fluidRow(
+        column(5,plotOutput("cam_MI")),
+        column(5,plotOutput("cam_MI_sport"))
+        ),
+    )
+  )
+)
+server <- function(input, output) {
+  Indispo <- read_excel("Indispo.xlsx", col_names = TRUE)
+  Indispo$sport<-as.factor(Indispo$sport)
+  Indispo$zone<-as.factor(Indispo$zone)
+  Indispo$duree<-as.factor(Indispo$duree)
+  
+  Indispo_MI <- Indispo[which(Indispo$zone=="MI"),]
+  Indispo_MS <- Indispo[which(Indispo$zone=="MS"),]
+  Indispo_Rachis <- Indispo[which(Indispo$zone=="Rachis"),]
+  
+  sliderValues <- reactive({
+    data.frame(
+      Name = c("Sport"),
+      Value = as.character(c(input$Sport)),
+      stringsAsFactors = TRUE)
+  })
+  output$values <- renderTable({
+    sliderValues()
+  })
+  nouveau_sportif <- reactive({
+    data.frame(
+      Sport = input$Sport)
+  })
+  tab.cam <- reactive({
+    tab.red = Indispo[which(Indispo$sport == input$Sport),]
+  })
+  output$test <- renderText({
+print(round(dim(Indispo_MI[which(Indispo_MI$duree==1),])[1])*100/dim(Indispo_MI)[1],1)
+  })
+  output$cam_MI <- renderPlot({
+    count.MI <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  #n = c(dim(Indispo_MI[which(Indispo_MI$duree==1),][1]),
+   #     dim(Indispo_MI[which(Indispo_MI$duree==2),][1]),
+    #    dim(Indispo_MI[which(Indispo_MI$duree==3),][1])),
+  
+  prop = c(round(dim(Indispo_MI[which(Indispo_MI$duree==1),])[1]*100/dim(Indispo_MI)[1],1),
+        round(dim(Indispo_MI[which(Indispo_MI$duree==2),])[1]*100/dim(Indispo_MI)[1],1),
+        round(dim(Indispo_MI[which(Indispo_MI$duree==3),])[1]*100/dim(Indispo_MI)[1],1))
+)
 
+count.MI <- count.MI %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
+
+ggplot(count.MI, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Indispo pour les blessures aux MI")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+  
+  output$cam_MI_sport <- renderPlot({
+    count.MI.sport <- data.frame(
+  class = c("1 semaine ou moins", "1-3 semaines", "Plus de 3 semaines"),
+  n1 = length(which(Indispo$duree==1 & Indispo$sport==nouveau_sportif()$Sport & Indispo$zone=="MI")),
+  n2 = length(which(Indispo$duree==2 & Indispo$sport==nouveau_sportif()$Sport & Indispo$zone=="MI")),
+  n3 = length(which(Indispo$duree==3 & Indispo$sport==nouveau_sportif()$Sport & Indispo$zone=="MI")),
+  n = c(n1,n2,n3),
+  prop = round(n/length(which(Indispo$sport==nouveau_sportif()$Sport & Indispo$zone=="MI"))*100,1)
+)
+
+count.MI.sport <- count.MI.sport %>%
+  arrange(desc(class)) %>%
+  mutate(lab.ypos = cumsum(prop) - 0.5*prop)
+
+mycols <- c("#CCFFFF", "#66FFFF", "#0099CC")
+
+ggplot(count.MI.sport, aes(x = "", y = prop, fill = class)) +
+  ggtitle("Indispo pour les blessures aux MI")+
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  scale_fill_manual(values = mycols) +
+  theme_void()
+  })
+
+}
+shinyApp(ui, server)
 ```
-
-
-
-```{r}
-```
-
-
-
-```{r}
-
-```
-
-
-
-```{r}
-
-```
-
